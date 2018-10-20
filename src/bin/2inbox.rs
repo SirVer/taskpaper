@@ -1,4 +1,6 @@
+#[cfg(target_os = "macos")]
 use osascript::JavaScript;
+
 use structopt::StructOpt;
 use taskpaper::Tags;
 
