@@ -17,10 +17,8 @@ main() {
 
     test -f Cargo.lock || cargo generate-lockfile
 
-    for i in 2inbox dump_reading_list taskpaper; do  
-       cross rustc --bin ${i} --target $TARGET --release -- -C lto
-       cp target/$TARGET/release/${i} $stage/
-    done
+    cross rustc --bin taskpaper --target $TARGET --release -- -C lto
+    cp target/$TARGET/release/taskpaper $stage/
 
     cd $stage
     tar czf $src/$CRATE_NAME-$TRAVIS_TAG-$TARGET.tar.gz *
