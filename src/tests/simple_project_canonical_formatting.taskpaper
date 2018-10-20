@@ -1,0 +1,15 @@
+Project:
+	One more project:
+		This project is out of line and should be sorted
+		at the top.
+		- This is a project
+	- A task @tag1 @tag2
+	- Another
+		Comment with trailing whitespace
+	- Parent is Another
+		Regular comment
+	- Old
+	- First again
+
+Second Project:
+	- Foo

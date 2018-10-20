@@ -1,0 +1,30 @@
+[package]
+authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
+edition = "2018"
+name = "taskpaper"
+version = "0.1.0"
+
+[dependencies]
+dirs = "1.0.4"
+lazy_static = "1.1.0"
+regex = "1.0.2"
+serde = "1.0.0"
+serde_derive = "1.0.0"
+structopt = "0.2.12"
+tempdir = "0.3.7"
+walkdir = "2.2.5"
+
+[dependencies.chrono]
+features = ["serde"]
+version = "0.4"
+
+[dev-dependencies]
+pretty_assertions = "0.5.1"
+
+[target]
+
+[target."cfg(target_os = \"macos\")"]
+
+[target."cfg(target_os = \"macos\")".dependencies]
+osascript = "0.3.0"
+plist = "0.3.0"
