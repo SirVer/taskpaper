@@ -31,8 +31,8 @@ struct CommandLineArguments {
     #[structopt(long = "--update")]
     update: bool,
 
-    #[structopt(subcommand)] // Note that we mark a field as a subcommand
-    cmd: Command,
+    #[structopt(subcommand)]
+    cmd: Option<Command>,
 }
 
 #[derive(StructOpt, Debug)]
@@ -72,7 +72,7 @@ fn main() {
     }
 
     match args.cmd {
-        Command::Search(args) => {
+        Some(Command::Search(args)) => {
             let taskpaper_file = TaskpaperFile::parse_file(args.input).unwrap();
             let results = taskpaper_file.search(&args.search).unwrap();
             print!(
@@ -93,9 +93,14 @@ fn main() {
                 })
             );
         }
-        Command::ToInbox(args) => to_inbox::to_inbox(&args),
+        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args),
 
         #[cfg(target_os = "macos")]
-        Command::DumpReadingList(args) => dump_reading_list::dump_reading_list(&args),
+        Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),
+        None => {
+            // TODO(sirver): I found no easy way to make clap output the usage here.
+            println!("Need a subcommand.");
+            std::process::exit(1);
+        }
     }
 }
