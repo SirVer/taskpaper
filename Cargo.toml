@@ -8,6 +8,7 @@ version = "0.1.1"
 dirs = "1.0.4"
 lazy_static = "1.1.0"
 regex = "1.0.2"
+self_update = "0.4.3"
 serde = "1.0.0"
 serde_derive = "1.0.0"
 structopt = "0.2.12"
@@ -20,6 +21,10 @@ version = "0.4"
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
+
+[target]
+
+[target."cfg(target_os = \"macos\")"]
 
 [target."cfg(target_os = \"macos\")".dependencies]
 osascript = "0.3.0"

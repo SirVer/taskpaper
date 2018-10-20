@@ -1,6 +1,3 @@
-#[cfg(target_os = "macos")]
-mod implementation {
-
 use chrono::prelude::*;
 use plist::serde::deserialize;
 use serde_derive::Deserialize;
@@ -9,10 +6,8 @@ use std::fs::File;
 use structopt::StructOpt;
 use taskpaper::Tags;
 
-/// Dump reading list. Dumps the reading list as items ready to go into the Inbox.
 #[derive(StructOpt, Debug)]
-#[structopt(name = "dump_reading_list")]
-struct CommandLineArguments {
+pub struct CommandLineArguments {
     /// Include done, i.e. read items. Otherwise they are ignored.
     #[structopt(long = "--done")]
     done: bool,
@@ -42,9 +37,9 @@ struct Entry {
     uri_dictionary: Option<HashMap<String, String>>,
 }
 
-pub fn main() {
-    let args = CommandLineArguments::from_args();
-
+pub fn dump_reading_list(args: &CommandLineArguments) {
+    // NOCOM(#sirver): hard coded path.
+    // NOCOM(#sirver): when reading list is empty, this will be empty too.
     let file = File::open("/Users/sirver/Library/Safari/Bookmarks.plist").unwrap();
     let plist: Entry = deserialize(file).unwrap();
     let c = plist
@@ -112,18 +107,3 @@ pub fn main() {
         println!("Wrote {} entries into Inbox!", num_entries);
     });
 }
-
-}
-
-
-#[cfg(target_os = "macos")]
-fn main() {
-    implementation::main();
-}
-
-
-#[cfg(not(target_os = "macos"))]
-fn main() {
-    panic!("This tool only works under Mac OS X.");
-}
-

@@ -1,16 +1,17 @@
 #[cfg(target_os = "macos")]
 use osascript::JavaScript;
 
+use std::io::{self, BufRead};
 use structopt::StructOpt;
 use taskpaper::Tags;
 
 /// Commandline script to cleverly add items to the inbox.
 #[derive(StructOpt, Debug)]
-#[structopt(name = "2inbox")]
-struct CommandLineArguments {
+pub struct CommandLineArguments {
     /// Add a link to the currently selected mail message to the item.
     #[structopt(short = "-m", long = "--mail")]
     mail: bool,
+    // NOCOM(#sirver): missing: prompt, smart
 }
 
 #[cfg(target_os = "macos")]
@@ -24,12 +25,31 @@ fn get_currently_selected_mail_message() -> String {
     script.execute().unwrap()
 }
 
-fn main() {
-    let args = CommandLineArguments::from_args();
-
+pub fn to_inbox(args: &CommandLineArguments) {
     let mut inbox = taskpaper::TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox)
         .expect("Could not parse inbox");
 
+    let stdin = io::stdin();
+    let lines: Vec<String> = stdin
+        .lock()
+        .lines()
+        .map(|e| e.unwrap_or_else(|_| "".into()))
+        .collect();
+
+    for line in lines {
+        let l = line.trim();
+        if l.is_empty() {
+            continue;
+        }
+        inbox.push(taskpaper::Entry::Task(taskpaper::Task {
+            text: l.to_string(),
+            // TODO(sirver): Hackish - we trust that tags get passed through in 'text'.
+            tags: Tags::new(),
+            note: None,
+        }));
+    }
+
+    // NOCOM(#sirver): this is not useful in its current form
     #[cfg(target_os = "macos")]
     {
         if args.mail {
