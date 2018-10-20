@@ -1,3 +1,6 @@
+#[cfg(target_os = "macos")]
+mod implementation {
+
 use chrono::prelude::*;
 use plist::serde::deserialize;
 use serde_derive::Deserialize;
@@ -39,7 +42,7 @@ struct Entry {
     uri_dictionary: Option<HashMap<String, String>>,
 }
 
-fn main() {
+pub fn main() {
     let args = CommandLineArguments::from_args();
 
     let file = File::open("/Users/sirver/Library/Safari/Bookmarks.plist").unwrap();
@@ -109,3 +112,18 @@ fn main() {
         println!("Wrote {} entries into Inbox!", num_entries);
     });
 }
+
+}
+
+
+#[cfg(target_os = "macos")]
+fn main() {
+    implementation::main();
+}
+
+
+#[cfg(not(target_os = "macos"))]
+fn main() {
+    panic!("This tool only works under Mac OS X.");
+}
+

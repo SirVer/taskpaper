@@ -21,10 +21,6 @@ version = "0.4"
 [dev-dependencies]
 pretty_assertions = "0.5.1"
 
-[target]
-
-[target."cfg(target_os = \"macos\")"]
-
 [target."cfg(target_os = \"macos\")".dependencies]
 osascript = "0.3.0"
 plist = "0.3.0"
