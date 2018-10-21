@@ -19,8 +19,13 @@ pub struct CommandLineArguments {
     #[structopt(short = "-m", long = "--mail")]
     mail: bool,
 
+    /// Prompt for input instead of reading stdout directly.
     #[structopt(short = "-p", long = "--prompt")]
     prompt: bool,
+
+    /// Assume the input text is base64 encoded and decode it first.
+    #[structopt(long = "--base64")]
+    base64: bool,
 }
 
 #[cfg(target_os = "macos")]
@@ -80,8 +85,10 @@ pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
     for mut line in lines {
         let mut l = line.trim();
 
-        // Transparently support decoding base64 encoded tasks.
-        if let Ok(decoded) = base64::decode(l) {
+        if args.base64 {
+            let decoded = base64::decode(l).map_err(|_| {
+                Error::misc("Input not base64 encoded, though base64 decoding was requested.")
+            })?;
             line = String::from_utf8_lossy(&decoded).to_string();
             l = line.trim();
         }
