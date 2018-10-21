@@ -1,5 +1,5 @@
-FROM japaric/i686-unknown-linux-musl
+FROM japaric/x86_64-unknown-linux-musl
 
 RUN dpkg --add-architecture amd64 && \
     apt-get update && \
-    apt-get install -y libx11-xcb-dev:amd64
+    apt-get install -y libx11-xcb-dev:amd64 python3:amd64

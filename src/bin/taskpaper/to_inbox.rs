@@ -48,11 +48,11 @@ fn get_clipboard(c: char) -> Result<String> {
     let contents = match c {
         '.' => {
             let mut ctx: X11ClipboardContext<Primary> = ClipboardProvider::new()?;
-            ctx.get_contents()?;
+            ctx.get_contents()?
         }
         ',' => {
             let mut ctx: X11ClipboardContext = ClipboardProvider::new()?;
-            ctx.get_contents()?;
+            ctx.get_contents()?
         }
         _ => unreachable!(),
     };
