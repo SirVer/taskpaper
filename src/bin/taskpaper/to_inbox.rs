@@ -77,8 +77,15 @@ pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
 
     let lines: Vec<String> = input.into_iter().filter(|l| !l.trim().is_empty()).collect();
 
-    for line in lines {
+    for mut line in lines {
         let mut l = line.trim();
+
+        // Transparently support decoding base64 encoded tasks.
+        if let Ok(decoded) = base64::decode(l) {
+            line = String::from_utf8_lossy(&decoded).to_string();
+            l = line.trim();
+        }
+
         let mut note_text = Vec::new();
         if l.starts_with(".") || l.starts_with(",") {
             let clipboard = get_clipboard(l.chars().next().unwrap())?;
