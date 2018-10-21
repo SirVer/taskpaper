@@ -50,10 +50,12 @@ fn get_clipboard(which: char) -> Result<String> {
     command.arg("-o");
     match which {
         ',' => (),
-        '.' => { command.arg("-selection").arg("c"); },
+        '.' => {
+            command.arg("-selection").arg("c");
+        }
         _ => unreachable!(),
     }
-    let output = command .output()?;
+    let output = command.output()?;
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
