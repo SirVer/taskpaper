@@ -2,7 +2,7 @@
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 edition = "2018"
 name = "taskpaper"
-version = "0.3.0"
+version = "0.3.1"
 
 [dependencies]
 clipboard = "0.5.0"
