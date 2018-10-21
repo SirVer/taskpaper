@@ -382,7 +382,7 @@ fn lex_keyword(text: &str, start: usize, stream: &mut CharStream) -> Result<Toke
         "or" => TokenKind::Or,
         "true" => TokenKind::True,
         _ => {
-            return Err(Error::other(format!(
+            return Err(Error::misc(format!(
                 "Unexpected identifier: '{}'.",
                 identifier
             )))
@@ -400,7 +400,7 @@ fn lex_string(text: &str, start: usize, stream: &mut CharStream) -> Result<Token
     }
 
     if stream.is_at_end() {
-        return Err(Error::other("Unterminated string."));
+        return Err(Error::misc("Unterminated string."));
     }
 
     stream.advance(); // Consumes '"'
@@ -444,7 +444,7 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 if stream.is_next('=') {
                     tokens.push(Token::new(BangEqual, position, 2));
                 } else {
-                    return Err(Error::other(format!(
+                    return Err(Error::misc(format!(
                         "Unexpected token: '!'. String continues with: '{}'",
                         &input[position..]
                     )));
@@ -472,7 +472,7 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 }
             }
             c => {
-                return Err(Error::other(format!(
+                return Err(Error::misc(format!(
                     "Unexpected token: '{}'. String continues with: '{}'",
                     c,
                     &input[position..]

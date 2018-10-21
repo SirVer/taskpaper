@@ -93,7 +93,7 @@ fn main() {
                 })
             );
         }
-        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args),
+        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),

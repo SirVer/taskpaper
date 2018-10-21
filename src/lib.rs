@@ -15,7 +15,8 @@ lazy_static! {
 
 #[derive(Debug)]
 pub enum Error {
-    Other(String),
+    Misc(String),
+    Other(Box<dyn::std::error::Error>),
     Io(io::Error),
 }
 
@@ -25,9 +26,15 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<Box<dyn::std::error::Error>> for Error {
+    fn from(other: Box<dyn::std::error::Error>) -> Error {
+        Error::Other(other)
+    }
+}
+
 impl Error {
-    fn other(text: impl Into<String>) -> Self {
-        Error::Other(text.into())
+    pub fn misc(text: impl Into<String>) -> Self {
+        Error::Misc(text.into())
     }
 }
 
