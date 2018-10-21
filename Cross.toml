@@ -1,0 +1,6 @@
+[target.i686-unknown-linux-musl]
+image = "sirver/i686-unknown-linux-musl-x11:latest"
+
+[target.x86_64-unknown-linux-musl]
+image = "sirver/x86_64-unknown-linux-musl-x11:latest"
+
