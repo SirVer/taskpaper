@@ -1,5 +1,4 @@
-#[cfg(target_os = "linux")]
-use clipboard::x11_clipboard::{Primary, X11ClipboardContext};
+#[cfg(target_os = "macos")]
 use clipboard::{ClipboardContext, ClipboardProvider};
 #[cfg(target_os = "macos")]
 use osascript::JavaScript;
@@ -11,8 +10,8 @@ use taskpaper::{Error, Result};
 /// Add items to the inbox.
 ///
 /// This is smart about ',' and '.' as first entries to add a note with the contents of the
-/// clipboard to every task that is added. Under Linux '.' is primary, i.e. the last mouse
-/// selection, while ',' is the X11 clipboard (copy & pasted). There is no distinction under Mac OS
+/// clipboard to every task that is added. Under Linux ',' is primary, i.e. the last mouse
+/// selection, while '.' is the X11 clipboard (copy & pasted). There is no distinction under Mac OS
 /// since there is only one clipboard.
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -44,19 +43,18 @@ fn get_clipboard(_: char) -> Result<String> {
 }
 
 #[cfg(target_os = "linux")]
-fn get_clipboard(c: char) -> Result<String> {
-    let contents = match c {
-        '.' => {
-            let mut ctx: X11ClipboardContext<Primary> = ClipboardProvider::new()?;
-            ctx.get_contents()?
-        }
-        ',' => {
-            let mut ctx: X11ClipboardContext = ClipboardProvider::new()?;
-            ctx.get_contents()?
-        }
+fn get_clipboard(which: char) -> Result<String> {
+    use std::process::Command;
+
+    let mut command = Command::new("xclip");
+    command.arg("-o");
+    match which {
+        ',' => (),
+        '.' => { command.arg("-selection").arg("c"); },
         _ => unreachable!(),
-    };
-    Ok(contents)
+    }
+    let output = command .output()?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
