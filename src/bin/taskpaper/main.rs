@@ -1,12 +1,20 @@
 use self_update::cargo_crate_version;
+use serde_derive::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{TaskpaperFile, ToStringWithIndent};
+use taskpaper::{self, TaskpaperFile, ToStringWithIndent};
 
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
 mod format;
 mod to_inbox;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConfigurationFile {
+    database: String,
+    formats: HashMap<String, taskpaper::FormatOptions>,
+}
 
 fn update() -> Result<(), Box<::std::error::Error>> {
     let target = self_update::get_target()?;
@@ -80,6 +88,17 @@ fn main() {
         return;
     }
 
+    let home = dirs::home_dir().expect("HOME not set.");
+    let config: ConfigurationFile = {
+        let data = std::fs::read_to_string(home.join(".taskpaperrc"))
+            .expect("Could not read ~/.taskpaperrc.");
+        let mut config: ConfigurationFile =
+            toml::from_str(&data).expect("Could not parse ~/.taskpaperrc.");
+        config.database =
+            shellexpand::tilde_with_context(&config.database, dirs::home_dir).to_string();
+        config
+    };
+
     match args.cmd {
         Some(Command::Search(args)) => {
             let taskpaper_file = TaskpaperFile::parse_file(args.input).unwrap();
@@ -103,7 +122,7 @@ fn main() {
             );
         }
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
-        Some(Command::Format(args)) => format::format(&args).unwrap(),
+        Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),

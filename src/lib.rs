@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde_derive::{Deserialize, Serialize};
 use std::collections::{hash_map::Iter as HashMapIter, HashMap};
 use std::fmt::{self, Write};
 use std::io;
@@ -123,7 +124,7 @@ pub struct Project {
     children: Vec<Entry>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Sort {
     // Do not change ordering of the items, print them as they arrive.
     Nothing,
@@ -132,7 +133,7 @@ pub enum Sort {
     ProjectsFirst,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct EmptyLineAfterProject {
     // NOCOM(#sirver): document
     pub top_level: usize,
@@ -140,21 +141,21 @@ pub struct EmptyLineAfterProject {
     pub others: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PrintChildren {
     // NOCOM(#sirver): document
     Yes,
     No,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PrintNotes {
     // NOCOM(#sirver): document
     Yes,
     No,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FormatOptions {
     pub indent: usize,
     pub sort: Sort,
@@ -414,7 +415,7 @@ fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Task {
 
     Task {
         // Also trim the leading '- '
-        text: without_tags.trim()[2..].to_string(),
+        text: without_tags.trim()[1..].trim_left().to_string(),
         tags,
         note,
     }
