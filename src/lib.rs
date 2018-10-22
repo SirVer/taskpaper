@@ -135,9 +135,9 @@ pub enum Sort {
 #[derive(Debug, Clone, Copy)]
 pub struct EmptyLineAfterProject {
     // NOCOM(#sirver): document
-    pub top_level: bool,
-    pub first_level: bool,
-    pub others: bool,
+    pub top_level: usize,
+    pub first_level: usize,
+    pub others: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -171,9 +171,9 @@ impl Default for FormatOptions {
             print_children: PrintChildren::Yes,
             print_notes: PrintNotes::Yes,
             empty_line_after_project: EmptyLineAfterProject {
-                top_level: true,
-                first_level: true,
-                others: false,
+                top_level: 1,
+                first_level: 1,
+                others: 0,
             },
         }
     }
@@ -342,7 +342,7 @@ fn print_entries(
                     1 => options.empty_line_after_project.first_level,
                     _ => options.empty_line_after_project.others,
                 };
-                if add_empty_line {
+                for _ in 0..add_empty_line {
                     maybe_empty_line(buf, idx)?;
                 }
             }

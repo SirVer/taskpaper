@@ -5,6 +5,7 @@ use taskpaper::{TaskpaperFile, ToStringWithIndent};
 
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
+mod format;
 mod to_inbox;
 
 fn update() -> Result<(), Box<::std::error::Error>> {
@@ -51,9 +52,17 @@ struct SearchArgs {
 
 #[derive(StructOpt, Debug)]
 enum Command {
-    /// Write items into the Inbox.
+    /// Add items to the inbox.
+    /// This is smart about ',' and '.' as first entries to add a note with the contents of the
+    /// clipboard to every task that is added. Under Linux ',' is primary, i.e. the last mouse
+    /// selection, while '.' is the X11 clipboard (copy & pasted). There is no distinction under Mac OS
+    /// since there is only one clipboard.
     #[structopt(name = "2inbox")]
     ToInbox(to_inbox::CommandLineArguments),
+
+    /// Format a taskpaper file, without introducing any other changes.
+    #[structopt(name = "format")]
+    Format(format::CommandLineArguments),
 
     #[structopt(name = "search")]
     Search(SearchArgs),
@@ -94,6 +103,7 @@ fn main() {
             );
         }
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
+        Some(Command::Format(args)) => format::format(&args).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),

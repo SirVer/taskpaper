@@ -96,9 +96,9 @@ pub fn dump_reading_list(args: &CommandLineArguments) {
             taskpaper::FormatOptions {
                 sort: taskpaper::Sort::Nothing,
                 empty_line_after_project: taskpaper::EmptyLineAfterProject {
-                    top_level: false,
-                    first_level: false,
-                    others: false,
+                    top_level: 0,
+                    first_level: 0,
+                    others: 0,
                 },
                 ..Default::default()
             },

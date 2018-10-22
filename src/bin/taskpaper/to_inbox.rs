@@ -7,12 +7,6 @@ use structopt::StructOpt;
 use taskpaper::Tags;
 use taskpaper::{Error, Result};
 
-/// Add items to the inbox.
-///
-/// This is smart about ',' and '.' as first entries to add a note with the contents of the
-/// clipboard to every task that is added. Under Linux ',' is primary, i.e. the last mouse
-/// selection, while '.' is the X11 clipboard (copy & pasted). There is no distinction under Mac OS
-/// since there is only one clipboard.
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
     /// Add a link to the currently selected mail message to the item.
@@ -127,9 +121,9 @@ pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
             taskpaper::FormatOptions {
                 sort: taskpaper::Sort::Nothing,
                 empty_line_after_project: taskpaper::EmptyLineAfterProject {
-                    top_level: false,
-                    first_level: false,
-                    others: false,
+                    top_level: 0,
+                    first_level: 0,
+                    others: 0,
                 },
                 ..Default::default()
             },
