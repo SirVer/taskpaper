@@ -42,13 +42,13 @@ impl Error {
 // NOCOM(#sirver): Use failure here
 pub type Result<T> = ::std::result::Result<T, Error>;
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Tag {
     pub name: String,
     pub value: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tags {
     tags: HashMap<String, Option<String>>,
 }
@@ -116,12 +116,12 @@ impl fmt::Display for Tag {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Project {
-    text: String,
-    note: Option<Note>,
-    tags: Tags,
-    children: Vec<Entry>,
+    pub text: String,
+    pub note: Option<Note>,
+    pub tags: Tags,
+    pub children: Vec<Entry>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -156,12 +156,20 @@ pub enum PrintNotes {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum VimReadOnly {
+    // NOCOM(#sirver): document
+    Yes,
+    No,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FormatOptions {
     pub indent: usize,
     pub sort: Sort,
     pub print_children: PrintChildren,
     pub print_notes: PrintNotes,
     pub empty_line_after_project: EmptyLineAfterProject,
+    pub vim_read_only: VimReadOnly,
 }
 
 impl Default for FormatOptions {
@@ -176,6 +184,7 @@ impl Default for FormatOptions {
                 first_level: 1,
                 others: 0,
             },
+            vim_read_only: VimReadOnly::No,
         }
     }
 }
@@ -219,7 +228,7 @@ impl ToStringWithIndent for Project {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Task {
     pub tags: Tags,
     pub text: String,
@@ -237,7 +246,7 @@ pub trait ToStringWithIndent {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Note {
     pub text: String,
 }
@@ -252,7 +261,7 @@ impl ToStringWithIndent for Note {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Entry {
     Task(Task),
     Project(Project),
@@ -475,13 +484,15 @@ fn parse_entry(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Entry {
 
 #[derive(Debug)]
 pub struct TaskpaperFile {
-    entries: Vec<Entry>,
+    pub entries: Vec<Entry>,
 }
 
 #[derive(Debug)]
 pub enum CommonFileKind {
     Inbox,
+    Todo,
     Tickle,
+    Checkout,
 }
 
 impl CommonFileKind {
@@ -489,7 +500,9 @@ impl CommonFileKind {
         let home = dirs::home_dir().expect("HOME not set.");
         let path = match *self {
             CommonFileKind::Inbox => home.join("Dropbox/Tasks/01_inbox.taskpaper"),
+            CommonFileKind::Todo => home.join("Dropbox/Tasks/02_todo.taskpaper"),
             CommonFileKind::Tickle => home.join("Dropbox/Tasks/03_tickle.taskpaper"),
+            CommonFileKind::Checkout => home.join("Dropbox/Tasks/09_to_checkout.taskpaper"),
         };
         if path.exists() {
             Some(path)
@@ -502,12 +515,20 @@ impl CommonFileKind {
     fn to_path_buf(&self) -> PathBuf {
         match *self {
             CommonFileKind::Inbox => PathBuf::from("01_inbox.taskpaper"),
+            CommonFileKind::Todo => PathBuf::from("02_todo.taskpaper"),
             CommonFileKind::Tickle => PathBuf::from("03_tickle.taskpaper"),
+            CommonFileKind::Checkout => PathBuf::from("09_to_checkout.taskpaper"),
         }
     }
 }
 
 impl TaskpaperFile {
+    pub fn new() -> Self {
+        TaskpaperFile {
+            entries: Vec::new(),
+        }
+    }
+
     pub fn parse_common_file(kind: CommonFileKind) -> Result<Self> {
         Self::parse_file(kind.find().expect("Common file not found!"))
     }
@@ -587,6 +608,13 @@ impl ToStringWithIndent for TaskpaperFile {
     fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result {
         let entries: Vec<&Entry> = self.entries.iter().collect();
         &entries.append_to_string(buf, options)?;
+
+        match options.vim_read_only {
+            VimReadOnly::No => (),
+            VimReadOnly::Yes => {
+                buf.push_str("\n\nvim:ro\n");
+            }
+        }
         Ok(())
     }
 }

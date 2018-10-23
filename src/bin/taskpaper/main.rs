@@ -7,6 +7,7 @@ use taskpaper::{self, TaskpaperFile, ToStringWithIndent};
 
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
+mod extract_checkout;
 mod format;
 mod to_inbox;
 
@@ -75,6 +76,9 @@ enum Command {
     #[structopt(name = "search")]
     Search(SearchArgs),
 
+    #[structopt(name = "extract_checkout")]
+    ExtractCheckout(extract_checkout::CommandLineArguments),
+
     /// Dump reading list. Dumps the reading list as items ready to go into the Inbox.
     #[cfg(target_os = "macos")]
     #[structopt(name = "dump_reading_list")]
@@ -123,6 +127,7 @@ fn main() {
         }
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
+        Some(Command::ExtractCheckout(args)) => extract_checkout::run(&args).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),
