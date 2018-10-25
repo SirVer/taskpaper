@@ -602,6 +602,33 @@ impl TaskpaperFile {
         }
         Ok(out)
     }
+
+    /// Finds the first project with the given name.
+    pub fn get_project_mut(&mut self, text: &str) -> Option<&mut Project> {
+        fn recurse<'a>(entry: &'a mut Entry, text: &str) -> Option<&'a mut Project> {
+            match entry {
+                Entry::Project(project) => {
+                    if project.text == text {
+                        return Some(project);
+                    }
+                    for e in &mut project.children {
+                        if let Some(project) = recurse(e, text) {
+                            return Some(project);
+                        }
+                    }
+                }
+                Entry::Task(_) | Entry::Note(_) => (),
+            };
+            None
+        }
+
+        for e in &mut self.entries {
+            if let Some(child) = recurse(e, text) {
+                return Some(child);
+            }
+        }
+        None
+    }
 }
 
 impl ToStringWithIndent for TaskpaperFile {
