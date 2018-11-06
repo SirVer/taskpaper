@@ -9,6 +9,7 @@ use taskpaper::{self, TaskpaperFile, ToStringWithIndent};
 mod dump_reading_list;
 mod extract_checkout;
 mod format;
+mod log_done;
 mod merge_timelines;
 mod to_inbox;
 
@@ -85,6 +86,10 @@ enum Command {
     #[structopt(name = "merge_timelines")]
     MergeTimelines(merge_timelines::CommandLineArguments),
 
+    /// Log everything marked as done into the logbook.
+    #[structopt(name = "log_done")]
+    LogDone(log_done::CommandLineArguments),
+
     /// Dump reading list. Dumps the reading list as items ready to go into the Inbox.
     #[cfg(target_os = "macos")]
     #[structopt(name = "dump_reading_list")]
@@ -135,6 +140,7 @@ fn main() {
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
         Some(Command::ExtractCheckout(args)) => extract_checkout::run(&args).unwrap(),
         Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),
+        Some(Command::LogDone(args)) => log_done::run(&args, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),

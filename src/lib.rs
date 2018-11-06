@@ -493,6 +493,7 @@ pub enum CommonFileKind {
     Todo,
     Tickle,
     Checkout,
+    Logbook,
 }
 
 impl CommonFileKind {
@@ -503,6 +504,7 @@ impl CommonFileKind {
             CommonFileKind::Todo => home.join("Dropbox/Tasks/02_todo.taskpaper"),
             CommonFileKind::Tickle => home.join("Dropbox/Tasks/03_tickle.taskpaper"),
             CommonFileKind::Checkout => home.join("Dropbox/Tasks/09_to_checkout.taskpaper"),
+            CommonFileKind::Logbook => home.join("Dropbox/Tasks/40_logbook.taskpaper"),
         };
         if path.exists() {
             Some(path)
@@ -518,6 +520,7 @@ impl CommonFileKind {
             CommonFileKind::Todo => PathBuf::from("02_todo.taskpaper"),
             CommonFileKind::Tickle => PathBuf::from("03_tickle.taskpaper"),
             CommonFileKind::Checkout => PathBuf::from("09_to_checkout.taskpaper"),
+            CommonFileKind::Logbook => PathBuf::from("40_logbook.taskpaper"),
         }
     }
 }
