@@ -11,6 +11,7 @@ mod extract_checkout;
 mod format;
 mod log_done;
 mod merge_timelines;
+mod tickle;
 mod to_inbox;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -90,6 +91,10 @@ enum Command {
     #[structopt(name = "log_done")]
     LogDone(log_done::CommandLineArguments),
 
+    /// Move stuff from tickle file into inbox and from inbox or todo into tickle.
+    #[structopt(name = "tickle")]
+    Tickle(tickle::CommandLineArguments),
+
     /// Dump reading list. Dumps the reading list as items ready to go into the Inbox.
     #[cfg(target_os = "macos")]
     #[structopt(name = "dump_reading_list")]
@@ -141,6 +146,7 @@ fn main() {
         Some(Command::ExtractCheckout(args)) => extract_checkout::run(&args).unwrap(),
         Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),
         Some(Command::LogDone(args)) => log_done::run(&args, &config).unwrap(),
+        Some(Command::Tickle(args)) => tickle::run(&args, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),

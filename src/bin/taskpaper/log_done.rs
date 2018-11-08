@@ -9,6 +9,7 @@ pub struct CommandLineArguments {}
 pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let mut todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
 
+    // TODO(sirver): This method could be much simpler expressed using the .filter() method.
     fn recurse(parent_texts: &[String], entries: Vec<Entry>, done: &mut Vec<Entry>) -> Vec<Entry> {
         let today = chrono::Local::now().date();
         let mut new_entries = Vec::new();

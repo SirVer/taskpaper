@@ -60,6 +60,10 @@ impl Tags {
         }
     }
 
+    pub fn remove(&mut self, name: &str) {
+        self.tags.remove(name);
+    }
+
     pub fn insert(&mut self, tag: Tag) {
         self.tags.insert(tag.name, tag.value);
     }
@@ -578,6 +582,7 @@ impl TaskpaperFile {
         Ok(())
     }
 
+    /// Return all objects that match 'query'.
     pub fn search(&self, query: &str) -> Result<Vec<&Entry>> {
         fn recurse<'a>(entry: &'a Entry, expr: &search::Expr, out: &mut Vec<&'a Entry>) {
             match entry {
@@ -604,6 +609,46 @@ impl TaskpaperFile {
             recurse(e, &expr, &mut out);
         }
         Ok(out)
+    }
+
+    /// Removes all items from 'self' that match 'query' and return them in the returned value.
+    /// If a parent item matches, the children are not tested further.
+    pub fn filter(&mut self, query: &str) -> Result<Vec<Entry>> {
+        fn recurse(
+            entries: Vec<Entry>,
+            expr: &search::Expr,
+            filtered: &mut Vec<Entry>,
+        ) -> Vec<Entry> {
+            let mut retained = Vec::new();
+            for e in entries {
+                match e {
+                    Entry::Task(t) => {
+                        if expr.evaluate(&t.tags).is_truish() {
+                            filtered.push(Entry::Task(t));
+                        } else {
+                            retained.push(Entry::Task(t));
+                        }
+                    }
+                    Entry::Project(mut p) => {
+                        if expr.evaluate(&p.tags).is_truish() {
+                            filtered.push(Entry::Project(p));
+                        } else {
+                            p.children = recurse(p.children, expr, filtered);
+                            retained.push(Entry::Project(p));
+                        }
+                    }
+                    Entry::Note(n) => retained.push(Entry::Note(n)),
+                }
+            }
+            retained
+        }
+
+        let expr = search::parse(query)?;
+        let mut filtered = Vec::new();
+        let mut entries = Vec::new();
+        ::std::mem::swap(&mut self.entries, &mut entries);
+        self.entries = recurse(entries, &expr, &mut filtered);
+        Ok(filtered)
     }
 
     /// Finds the first project with the given name.
