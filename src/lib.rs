@@ -577,8 +577,16 @@ impl TaskpaperFile {
     }
 
     pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {
-        let s = self.to_string(options);
-        std::fs::write(path, s)?;
+        let new = self.to_string(options);
+
+        let has_changed = match std::fs::read_to_string(&path) {
+            Err(_) => true,
+            Ok(old) => sha1::Sha1::from(&old) == sha1::Sha1::from(&new),
+        };
+
+        if has_changed {
+            std::fs::write(&path, new)?;
+        }
         Ok(())
     }
 
