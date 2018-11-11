@@ -134,10 +134,10 @@ impl Value {
     fn less(self, o: Value) -> Value {
         match (self, o) {
             (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
+            (Value::Bool(_), Value::String(_)) => Value::Undefined,
+            (Value::String(_), Value::Bool(_)) => Value::Undefined,
             (Value::Bool(a), Value::Bool(b)) => Value::Bool(a < b),
             (Value::String(a), Value::String(b)) => Value::Bool(a < b),
-            (Value::Bool(_), Value::String(_)) => Value::Bool(true),
-            (Value::String(_), Value::Bool(_)) => Value::Bool(false),
         }
     }
 
