@@ -1,18 +1,13 @@
-use lazy_static::lazy_static;
-use regex::Regex;
+pub mod db;
+pub mod search;
+pub mod tag;
+
+pub use crate::tag::{Tag, Tags};
 use serde_derive::{Deserialize, Serialize};
-use std::collections::{hash_map::Iter as HashMapIter, HashMap};
 use std::fmt::{self, Write};
 use std::io;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
-
-pub mod db;
-pub mod search;
-
-lazy_static! {
-    static ref TAGS: Regex = { Regex::new(r"^(@\w+)(\([^)]*\))?").unwrap() };
-}
 
 #[derive(Debug)]
 pub enum Error {
@@ -41,84 +36,6 @@ impl Error {
 
 // NOCOM(#sirver): Use failure here
 pub type Result<T> = ::std::result::Result<T, Error>;
-
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct Tag {
-    pub name: String,
-    pub value: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Tags {
-    tags: HashMap<String, Option<String>>,
-}
-
-impl Tags {
-    pub fn new() -> Self {
-        Tags {
-            tags: HashMap::new(),
-        }
-    }
-
-    pub fn remove(&mut self, name: &str) {
-        self.tags.remove(name);
-    }
-
-    pub fn insert(&mut self, tag: Tag) {
-        self.tags.insert(tag.name, tag.value);
-    }
-
-    pub fn contains(&self, name: &str) -> bool {
-        self.tags.contains_key(name)
-    }
-
-    pub fn get(&self, name: &str) -> Option<Tag> {
-        self.tags.get(name).map(|v| Tag {
-            name: name.to_string(),
-            value: v.clone(),
-        })
-    }
-
-    pub fn iter(&self) -> TagsIterator<'_> {
-        TagsIterator {
-            iter: self.tags.iter(),
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.tags.len()
-    }
-}
-
-pub struct TagsIterator<'a> {
-    iter: HashMapIter<'a, String, Option<String>>,
-}
-
-impl<'a> Iterator for TagsIterator<'a> {
-    type Item = Tag;
-
-    fn next(&mut self) -> Option<Tag> {
-        self.iter.next().map(|(k, v)| Tag {
-            name: k.to_string(),
-            value: v.clone(),
-        })
-    }
-}
-impl Tag {
-    pub fn new(name: String, value: Option<String>) -> Self {
-        Tag { name, value }
-    }
-}
-
-impl fmt::Display for Tag {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "@{}", self.name)?;
-        if let Some(v) = &self.value {
-            write!(f, "({})", v)?;
-        }
-        Ok(())
-    }
-}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Project {
@@ -389,7 +306,7 @@ fn is_project(line: &str) -> bool {
 }
 
 fn classify(line: &str) -> LineKind {
-    let (without_tags, _) = extract_tags(line);
+    let (without_tags, _) = tag::extract_tags(line.to_string());
     if is_task(&without_tags) {
         LineKind::Task
     } else if is_project(&without_tags) {
@@ -397,17 +314,6 @@ fn classify(line: &str) -> LineKind {
     } else {
         LineKind::Note
     }
-}
-
-// NOCOM(#sirver): should take a String
-fn extract_tags(line: &str) -> (String, Tags) {
-    let mut tags = Tags::new();
-    let mut line = line.to_string();
-    while let Some((tag, (start, end))) = find_tag(&line) {
-        tags.insert(tag);
-        line = line[0..start].to_string() + &line[end..line.len()];
-    }
-    (line, tags)
 }
 
 #[derive(Debug)]
@@ -419,7 +325,7 @@ struct LineToken {
 
 fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Task {
     let token = it.next().unwrap();
-    let (without_tags, tags) = extract_tags(&token.text);
+    let (without_tags, tags) = tag::extract_tags(token.text);
 
     let note = match it.peek() {
         Some(nt) if nt.kind == LineKind::Note => Some(parse_note(it).text),
@@ -436,7 +342,7 @@ fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Task {
 
 fn parse_project(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Project {
     let token = it.next().unwrap();
-    let (without_tags, tags) = extract_tags(&token.text);
+    let (without_tags, tags) = tag::extract_tags(token.text);
     let without_tags = without_tags.trim();
 
     let note = match it.peek() {
@@ -581,7 +487,7 @@ impl TaskpaperFile {
 
         let has_changed = match std::fs::read_to_string(&path) {
             Err(_) => true,
-            Ok(old) => sha1::Sha1::from(&old) == sha1::Sha1::from(&new),
+            Ok(old) => sha1::Sha1::from(&old) != sha1::Sha1::from(&new),
         };
 
         if has_changed {
@@ -702,118 +608,10 @@ impl ToStringWithIndent for TaskpaperFile {
     }
 }
 
-fn find_tag(s: &str) -> Option<(Tag, (usize, usize))> {
-    let mut tag_could_start = Some(0);
-    let mut last_char = None;
-    for (idx, c) in s.char_indices() {
-        if let Some(sidx) = tag_could_start {
-            if let Some(c) = TAGS.captures(&s[idx..]) {
-                let name = c.get(1).unwrap().as_str()[1..].to_string(); // Remove @
-                let value = c.get(2).map(|s| {
-                    let s = s.as_str();
-                    s[1..s.len() - 1].to_string() // Remove ()
-                });
-                let end = idx + c.get(0).unwrap().end();
-                return Some((Tag { name, value }, (sidx, end)));
-            }
-        }
-        tag_could_start = match c {
-            ' ' | '(' | ')' => match last_char {
-                Some(a) if a == c => tag_could_start,
-                _ => Some(idx),
-            },
-            _ => None,
-        };
-        last_char = Some(c);
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-
-    #[test]
-    fn test_find_tag() {
-        fn check(input: &str, golden_tag: Tag, golden_consumed: usize) {
-            let (tag, range) = find_tag(input).unwrap();
-            assert_eq!(tag, golden_tag);
-            let golden_range = (0, golden_consumed);
-            assert_eq!(
-                golden_range, range,
-                "{} ({:?} != {:?})",
-                input, golden_range, range
-            );
-        }
-        check(
-            "@done",
-            Tag {
-                name: "done".to_string(),
-                value: None,
-            },
-            5,
-        );
-        check(
-            "@due(today)",
-            Tag {
-                name: "due".to_string(),
-                value: Some("today".to_string()),
-            },
-            11,
-        );
-        check(
-            "@uuid(123-abc-ef)",
-            Tag {
-                name: "uuid".to_string(),
-                value: Some("123-abc-ef".to_string()),
-            },
-            17,
-        );
-        check(
-            "@another(foo bar)   ",
-            Tag {
-                name: "another".to_string(),
-                value: Some("foo bar".to_string()),
-            },
-            17,
-        );
-        check(
-            " @another(foo bar)   ",
-            Tag {
-                name: "another".to_string(),
-                value: Some("foo bar".to_string()),
-            },
-            18,
-        );
-        check(
-            "     @another(foo bar)",
-            Tag {
-                name: "another".to_string(),
-                value: Some("foo bar".to_string()),
-            },
-            22,
-        );
-        check(
-            "@foo @bar",
-            Tag {
-                name: "foo".to_string(),
-                value: None,
-            },
-            4,
-        );
-    }
-
-    #[test]
-    fn test_extract_tag() {
-        fn check(input: &str, num_tags: usize, golden_clean: &str) {
-            let (clean, tags) = extract_tags(input);
-            assert_eq!(golden_clean, clean);
-            assert_eq!(num_tags, tags.len());
-        }
-        check("- foo blub @done", 1, "- foo blub");
-        check("- foo @check blub @done @aaa", 3, "- foo blub");
-    }
 
     #[test]
     fn test_simple_task_parse() {

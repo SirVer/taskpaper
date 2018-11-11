@@ -316,13 +316,13 @@ impl Parser {
 }
 
 #[derive(Debug)]
-struct CharStream {
+pub struct CharStream {
     indices: Vec<(usize, char)>,
     current: usize,
 }
 
 impl CharStream {
-    fn new(text: &str) -> Self {
+    pub fn new(text: &str) -> Self {
         let indices = text.char_indices().collect();
         CharStream {
             current: 0,
@@ -330,11 +330,11 @@ impl CharStream {
         }
     }
 
-    fn peek(&mut self) -> Option<char> {
+    pub fn peek(&mut self) -> Option<char> {
         self.indices.get(self.current).map(|e| e.1)
     }
 
-    fn is_next(&mut self, c: char) -> bool {
+    pub fn is_next(&mut self, c: char) -> bool {
         if self.peek() == Some(c) {
             self.advance();
             true
@@ -343,7 +343,7 @@ impl CharStream {
         }
     }
 
-    fn position(&self) -> usize {
+    pub fn position(&self) -> usize {
         if self.is_at_end() {
             self.indices[self.indices.len() - 1].0 + 1
         } else {
@@ -351,12 +351,12 @@ impl CharStream {
         }
     }
 
-    fn advance(&mut self) -> char {
+    pub fn advance(&mut self) -> char {
         self.current += 1;
         self.indices[self.current - 1].1
     }
 
-    fn is_at_end(&self) -> bool {
+    pub fn is_at_end(&self) -> bool {
         self.current >= self.indices.len()
     }
 }
