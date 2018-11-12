@@ -8,6 +8,7 @@ use taskpaper::{self, TaskpaperFile, ToStringWithIndent};
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
 mod extract_checkout;
+mod extract_timeline;
 mod format;
 mod log_done;
 mod merge_timelines;
@@ -82,6 +83,9 @@ enum Command {
     #[structopt(name = "extract_checkout")]
     ExtractCheckout(extract_checkout::CommandLineArguments),
 
+    #[structopt(name = "extract_timeline")]
+    ExtractTimeline(extract_timeline::CommandLineArguments),
+
     /// Merge one taskpaper file into another on a project level. All top level items that are not
     /// in both are appended to the end.
     #[structopt(name = "merge_timelines")]
@@ -144,6 +148,7 @@ fn main() {
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
         Some(Command::ExtractCheckout(args)) => extract_checkout::run(&args).unwrap(),
+        Some(Command::ExtractTimeline(args)) => extract_timeline::run(&args, &config).unwrap(),
         Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),
         Some(Command::LogDone(args)) => log_done::run(&args, &config).unwrap(),
         Some(Command::Tickle(args)) => tickle::run(&args, &config).unwrap(),

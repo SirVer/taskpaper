@@ -11,7 +11,7 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
 
     // TODO(sirver): This method could be much simpler expressed using the .filter() method.
     fn recurse(parent_texts: &[String], entries: Vec<Entry>, done: &mut Vec<Entry>) -> Vec<Entry> {
-        let today = chrono::Local::now().date();
+        let today = chrono::Local::now().date().format("%Y-%m-%d").to_string();
         let mut new_entries = Vec::new();
         for e in entries {
             match e {
@@ -19,7 +19,7 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
                     if p.tags.contains("done") {
                         let mut tag = p.tags.get("done").unwrap();
                         if tag.value.is_none() {
-                            tag.value = Some(today.format("%Y-%m-%d").to_string());
+                            tag.value = Some(today.clone());
                             p.tags.insert(tag);
                         }
                         p.text = format!("{} • {}", parent_texts.join(" • "), p.text);
@@ -35,7 +35,7 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
                     if t.tags.contains("done") {
                         let mut tag = t.tags.get("done").unwrap();
                         if tag.value.is_none() {
-                            tag.value = Some(today.format("%Y-%m-%d").to_string());
+                            tag.value = Some(today.clone());
                             t.tags.insert(tag);
                         }
                         t.text = format!("{} • {}", parent_texts.join(" • "), t.text);
