@@ -129,7 +129,7 @@ fn main() {
             let results = taskpaper_file.search(&args.search).unwrap();
             print!(
                 "{}",
-                results.to_string(taskpaper::FormatOptions {
+                results.to_string(0, taskpaper::FormatOptions {
                     sort: taskpaper::Sort::Nothing,
                     print_children: if args.descendants {
                         taskpaper::PrintChildren::Yes

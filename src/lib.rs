@@ -85,7 +85,6 @@ pub enum VimReadOnly {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FormatOptions {
-    pub indent: usize,
     pub sort: Sort,
     pub print_children: PrintChildren,
     pub print_notes: PrintNotes,
@@ -96,7 +95,6 @@ pub struct FormatOptions {
 impl Default for FormatOptions {
     fn default() -> Self {
         FormatOptions {
-            indent: 0,
             sort: Sort::ProjectsFirst,
             print_children: PrintChildren::Yes,
             print_notes: PrintNotes::Yes,
@@ -111,8 +109,8 @@ impl Default for FormatOptions {
 }
 
 impl ToStringWithIndent for Project {
-    fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result {
-        let indent_str = "\t".repeat(options.indent);
+    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+        let indent_str = "\t".repeat(indent);
         let mut tags = self.tags.iter().map(|t| t.to_string()).collect::<Vec<_>>();
         tags.sort();
         let tags_string = if tags.is_empty() {
@@ -126,7 +124,7 @@ impl ToStringWithIndent for Project {
             PrintNotes::No => (),
             PrintNotes::Yes => {
                 if let Some(note) = &self.note {
-                    let note_indent = "\t".repeat(options.indent + 1);
+                    let note_indent = "\t".repeat(indent + 1);
                     for line in note.text.split_terminator('\n') {
                         writeln!(buf, "{}{}", note_indent, line)?;
                     }
@@ -139,11 +137,7 @@ impl ToStringWithIndent for Project {
             PrintChildren::Yes => print_entries(
                 buf,
                 self.children.iter().collect(),
-                FormatOptions {
-                    indent: options.indent + 1,
-                    ..options
-                },
-            )?,
+                indent + 1, options)?,
         }
         Ok(())
     }
@@ -158,11 +152,11 @@ pub struct Task {
 }
 
 pub trait ToStringWithIndent {
-    fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result;
+    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result;
 
-    fn to_string(&self, options: FormatOptions) -> String {
+    fn to_string(&self, indent: usize, options: FormatOptions) -> String {
         let mut s = String::new();
-        self.append_to_string(&mut s, options).unwrap();
+        self.append_to_string(&mut s, indent, options).unwrap();
         s
     }
 }
@@ -173,8 +167,8 @@ pub struct Note {
 }
 
 impl ToStringWithIndent for Note {
-    fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result {
-        let indent = "\t".repeat(options.indent);
+    fn append_to_string(&self, buf: &mut String, indent: usize, _: FormatOptions) -> fmt::Result {
+        let indent = "\t".repeat(indent);
         for line in self.text.split_terminator('\n') {
             writeln!(buf, "{}{}", indent, line)?;
         }
@@ -199,18 +193,18 @@ impl Entry {
 }
 
 impl ToStringWithIndent for Entry {
-    fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result {
+    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
         match self {
-            Entry::Task(t) => t.append_to_string(buf, options),
-            Entry::Project(p) => p.append_to_string(buf, options),
-            Entry::Note(n) => n.append_to_string(buf, options),
+            Entry::Task(t) => t.append_to_string(buf, indent, options),
+            Entry::Project(p) => p.append_to_string(buf, indent, options),
+            Entry::Note(n) => n.append_to_string(buf, indent, options),
         }
     }
 }
 
 impl ToStringWithIndent for Task {
-    fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result {
-        let indent_str = "\t".repeat(options.indent);
+    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+        let indent_str = "\t".repeat(indent);
         let mut tags = self.tags.iter().collect::<Vec<Tag>>();
         tags.sort_by_key(|t| (t.value.is_some(), t.name.clone()));
         let tags_string = if tags.is_empty() {
@@ -225,7 +219,7 @@ impl ToStringWithIndent for Task {
             PrintNotes::No => (),
             PrintNotes::Yes => {
                 if let Some(note) = &self.note {
-                    let note_indent = "\t".repeat(options.indent + 1);
+                    let note_indent = "\t".repeat(indent + 1);
                     for line in note.split_terminator('\n') {
                         writeln!(buf, "{}{}", note_indent, line)?;
                     }
@@ -237,8 +231,8 @@ impl ToStringWithIndent for Task {
 }
 
 impl ToStringWithIndent for [&Entry] {
-    fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result {
-        print_entries(buf, self.to_vec(), options)?;
+    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+        print_entries(buf, self.to_vec(), indent, options)?;
         Ok(())
     }
 }
@@ -246,6 +240,7 @@ impl ToStringWithIndent for [&Entry] {
 fn print_entries(
     buf: &mut String,
     mut entries: Vec<&Entry>,
+    indent: usize,
     options: FormatOptions,
 ) -> fmt::Result {
     // Projects are bubbled to the top.
@@ -267,8 +262,8 @@ fn print_entries(
     for (idx, e) in entries.iter().enumerate() {
         match e {
             Entry::Project(p) => {
-                p.append_to_string(buf, options)?;
-                let add_empty_line = match options.indent {
+                p.append_to_string(buf, indent, options)?;
+                let add_empty_line = match indent {
                     0 => options.empty_line_after_project.top_level,
                     1 => options.empty_line_after_project.first_level,
                     _ => options.empty_line_after_project.others,
@@ -278,9 +273,9 @@ fn print_entries(
                 }
             }
             Entry::Task(t) => {
-                t.append_to_string(buf, options)?;
+                t.append_to_string(buf, indent, options)?;
             }
-            Entry::Note(n) => n.append_to_string(buf, options)?,
+            Entry::Note(n) => n.append_to_string(buf, indent, options)?,
         }
     }
     Ok(())
@@ -486,7 +481,7 @@ impl TaskpaperFile {
     }
 
     pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {
-        let new = self.to_string(options);
+        let new = self.to_string(0, options);
 
         let has_changed = match std::fs::read_to_string(&path) {
             Err(_) => true,
@@ -597,9 +592,9 @@ impl TaskpaperFile {
 }
 
 impl ToStringWithIndent for TaskpaperFile {
-    fn append_to_string(&self, buf: &mut String, options: FormatOptions) -> fmt::Result {
+    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
         let entries: Vec<&Entry> = self.entries.iter().collect();
-        &entries.append_to_string(buf, options)?;
+        &entries.append_to_string(buf, indent, options)?;
 
         match options.vim_read_only {
             VimReadOnly::No => (),
@@ -674,7 +669,7 @@ mod tests {
     fn test_parsing_roundtrip() {
         let input = include_str!("tests/simple_project_canonical_formatting.taskpaper");
         let tpf = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(input, tpf.to_string(FormatOptions::default()));
+        assert_eq!(input, tpf.to_string(0, FormatOptions::default()));
     }
 
     #[test]
@@ -682,7 +677,7 @@ mod tests {
         let input = include_str!("tests/simple_project.taskpaper");
         let expected = include_str!("tests/simple_project_canonical_formatting.taskpaper");
         let tpf = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(expected, tpf.to_string(FormatOptions::default()));
+        assert_eq!(expected, tpf.to_string(0, FormatOptions::default()));
     }
 
     #[test]
@@ -693,7 +688,7 @@ mod tests {
         .unwrap();
         let golden =
             "- Arbeit • Foo • blah @coding @next @blocked(arg prs) @done(2018-06-21)\n";
-        assert_eq!(golden, tpf.to_string(FormatOptions::default()));
+        assert_eq!(golden, tpf.to_string(0, FormatOptions::default()));
     }
 
     // NOCOM(#sirver): bring back
@@ -701,7 +696,7 @@ mod tests {
     fn test_simple_project_parse() {
         let input = include_str!("tests/simple_project.taskpaper");
         let output = TaskpaperFile::parse(&input).unwrap();
-        let s = output.to_string(FormatOptions::default());
+        let s = output.to_string(0, FormatOptions::default());
         // NOCOM(#sirver): test something with s?
         println!("{}", s);
         // TODO(sirver): This should use some diff algo to be easier to understand.

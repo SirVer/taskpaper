@@ -10,10 +10,7 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
 
     let today = chrono::Local::now().naive_local().date();
-    //.format("%Y-%m-%d").to_string();
-
     let mut timeline = TaskpaperFile::new();
-
     let entries = todo.search("@due")?;
     let mut sorted = BTreeMap::new();
     for mut entry in entries.into_iter().cloned() {
