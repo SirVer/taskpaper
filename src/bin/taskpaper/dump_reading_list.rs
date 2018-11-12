@@ -38,9 +38,8 @@ struct Entry {
 }
 
 pub fn dump_reading_list(args: &CommandLineArguments) {
-    // NOCOM(#sirver): hard coded path.
-    // NOCOM(#sirver): when reading list is empty, this will be empty too.
-    let file = File::open("/Users/sirver/Library/Safari/Bookmarks.plist").unwrap();
+    let home = dirs::home_dir().expect("HOME not set.");
+    let file = File::open(&home.join("Library/Safari/Bookmarks.plist")).unwrap();
     let plist: Entry = deserialize(file).unwrap();
     let c = plist
         .children

@@ -156,7 +156,12 @@ impl Value {
 }
 
 impl Expr {
-    // NOCOM(#sirver): This must return either Bool or String.
+    pub fn parse(text: &str) -> Result<Expr> {
+        let tokens = lex(text)?;
+        let mut parser = Parser::new(tokens);
+        Ok(*parser.expression())
+    }
+
     pub fn evaluate(&self, tags: &Tags) -> Value {
         match self {
             Expr::Tag(name) => match tags.get(name) {
@@ -186,13 +191,6 @@ impl Expr {
 pub struct Parser {
     current: usize,
     tokens: Vec<Token>,
-}
-
-pub fn parse(text: &str) -> Result<Expr> {
-    let tokens = lex(text)?;
-    let mut parser = Parser::new(tokens);
-    // NOCOM(#sirver): should call expression
-    Ok(*parser.or())
 }
 
 impl Parser {
@@ -233,8 +231,8 @@ impl Parser {
             TokenKind::Less,
             TokenKind::LessEqual,
         ]) {
-            // NOCOM(#sirver): This is fairly ugly and requires me to keep a copy. It would be
-            // better to pass ownership in advance() and previous()
+            // TODO(sirver): This is fairly ugly and requires me to keep a copy. It would be better
+            // to pass ownership in advance() and previous()
             let prev = self.previous().kind.clone();
             let right = self.unary();
             expr = match prev {
@@ -485,12 +483,6 @@ fn lex(input: &str) -> Result<Vec<Token>> {
     Ok(tokens)
 }
 
-// NOCOM(#sirver): example of my searches
-// Filter o:-prio @active and @thisweek
-// Filter o:-prio @active and not @thisweek
-// Filter o:-prio @vormschlafen
-
-// NOCOM(#sirver): Fill in some tests
 #[cfg(test)]
 mod tests {
     use super::TokenKind::*;
@@ -650,23 +642,22 @@ mod tests {
 
     #[test]
     fn test_grouping() {
-        // NOCOM(#sirver): parse should be on Expr
-        let expr = parse("false or ((false and true) or true)").unwrap();
+        let expr = Expr::parse("false or ((false and true) or true)").unwrap();
         let tags = Tags::new();
         assert_eq!(Value::Bool(true), expr.evaluate(&tags));
     }
 
     #[test]
     fn test_mixing_string_bool() {
-        let expr = parse("false or \"foo\"").unwrap();
+        let expr = Expr::parse("false or \"foo\"").unwrap();
         let tags = Tags::new();
         assert_eq!(Value::String("foo".into()), expr.evaluate(&tags));
 
-        let expr = parse("true and \"foo\"").unwrap();
+        let expr = Expr::parse("true and \"foo\"").unwrap();
         let tags = Tags::new();
         assert_eq!(Value::String("foo".into()), expr.evaluate(&tags));
 
-        let expr = parse("\"foo\" and true").unwrap();
+        let expr = Expr::parse("\"foo\" and true").unwrap();
         let tags = Tags::new();
         assert_eq!(Value::Bool(true), expr.evaluate(&tags));
     }
@@ -674,7 +665,7 @@ mod tests {
     #[test]
     fn test_tag_insertion() {
         use crate::Tag;
-        let expr = parse("@foo or (@bar = \"any\")").unwrap();
+        let expr = Expr::parse("@foo or (@bar = \"any\")").unwrap();
 
         {
             let tags = Tags::new();

@@ -34,7 +34,6 @@ impl Error {
     }
 }
 
-// NOCOM(#sirver): Use failure here
 pub type Result<T> = ::std::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -56,7 +55,7 @@ pub enum Sort {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct EmptyLineAfterProject {
-    // NOCOM(#sirver): document
+    // TODO(sirver): Document.
     pub top_level: usize,
     pub first_level: usize,
     pub others: usize,
@@ -64,21 +63,21 @@ pub struct EmptyLineAfterProject {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PrintChildren {
-    // NOCOM(#sirver): document
+    // TODO(sirver): Document.
     Yes,
     No,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PrintNotes {
-    // NOCOM(#sirver): document
+    // TODO(sirver): Document.
     Yes,
     No,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum VimReadOnly {
-    // NOCOM(#sirver): document
+    // TODO(sirver): Document.
     Yes,
     No,
 }
@@ -151,7 +150,7 @@ impl ToStringWithIndent for Project {
 pub struct Task {
     pub tags: Tags,
     pub text: String,
-    // NOCOM(#sirver): that note should be a proper note structure.
+    // TODO(sirver): Consider to use Note here instead of String.
     pub note: Option<String>,
 }
 
@@ -539,7 +538,7 @@ impl TaskpaperFile {
             }
         }
 
-        let expr = search::parse(query)?;
+        let expr = search::Expr::parse(query)?;
         let mut out = Vec::new();
         for e in &self.entries {
             recurse(e, &expr, &mut out);
@@ -579,7 +578,7 @@ impl TaskpaperFile {
             retained
         }
 
-        let expr = search::parse(query)?;
+        let expr = search::Expr::parse(query)?;
         let mut filtered = Vec::new();
         let mut entries = Vec::new();
         ::std::mem::swap(&mut self.entries, &mut entries);
@@ -718,37 +717,5 @@ mod tests {
         let golden =
             "- Arbeit • Foo • blah @coding @next @blocked(arg prs) @done(2018-06-21)\n";
         assert_eq!(golden, tpf.to_string(0, FormatOptions::default()));
-    }
-
-    // NOCOM(#sirver): bring back
-    #[test]
-    fn test_simple_project_parse() {
-        let input = include_str!("tests/simple_project.taskpaper");
-        let output = TaskpaperFile::parse(&input).unwrap();
-        let s = output.to_string(0, FormatOptions::default());
-        // NOCOM(#sirver): test something with s?
-        println!("{}", s);
-        // TODO(sirver): This should use some diff algo to be easier to understand.
-        assert_eq!(2, output.entries.len());
-
-        // let golden = vec![
-        // Entry::Project(Project {
-        // text: "Project".into(),
-        // tags: Tags::new(),
-        // children: vec![
-        // Entry::Task(Task {
-        // text: "A task".to_string(),
-        // tags: {
-        // let mut tags = Tags::new();
-        // tags.insert(Tag { name: "tag1".into(), value: None });
-        // tags.insert(Tag { name: "tag2".into(), value: None });
-        // tags
-        // },
-        // note: None
-        // }),
-        // ]
-        // }),
-        // ];
-        // assert_eq!(golden, output);
     }
 }

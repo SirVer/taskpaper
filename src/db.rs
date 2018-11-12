@@ -61,10 +61,10 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::CommonFileKind;
     use std::fs::File;
     use std::io::Write;
     use tempdir::TempDir;
+    use crate::CommonFileKind;
 
     /// Sets up a directory in which files can be dumped. This directory can be loaded as database,
     /// modified and then asserted over.
@@ -98,6 +98,7 @@ mod tests {
         }
     }
 
+    // TODO(sirver): Actually add a few tests for tickling, timeline and so on?
     #[test]
     fn test_tickle_file() {
         let mut t = DatabaseTest::new();
@@ -114,6 +115,6 @@ mod tests {
 
         let _db = t.read_database();
 
-        // NOCOM(#sirver): And here I realized that I require implementing filtering first.
+        // TODO(sirver): This test does nothing currently.
     }
 }

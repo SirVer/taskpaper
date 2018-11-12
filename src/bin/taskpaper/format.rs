@@ -23,14 +23,6 @@ pub struct CommandLineArguments {
 }
 
 pub fn format(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
-    // NOCOM(#sirver): If it is inside the database, let the database handle writing (and config)
-    // let db = taskpaper::db::Database::read(&config.database)?;
-    // let input = args.input.absolutize()?;
-    // if let Some(rel) = db.relative(&args.input) {
-    // if config.formats.contains_key(rel.to_string_lossy().as_ref()) {
-    // println!("Formatting
-    // }
-    // }
     let style = match args.style.as_ref() {
         None => taskpaper::FormatOptions::default(),
         Some(s) => match config.formats.get(s) {
