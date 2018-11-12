@@ -4,9 +4,7 @@ use taskpaper::{Result, TaskpaperFile};
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
 
-pub fn run(_: &CommandLineArguments) -> Result<()> {
-    let todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
-
+pub fn extract_checkout(todo: &TaskpaperFile) -> Result<()> {
     let mut checkout = TaskpaperFile::new();
 
     const PROJECTS: [(&str, &str); 6] = [
@@ -50,5 +48,11 @@ pub fn run(_: &CommandLineArguments) -> Result<()> {
             ..Default::default()
         },
     )?;
+    Ok(())
+}
+
+pub fn run(_: &CommandLineArguments) -> Result<()> {
+    let todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
+    extract_checkout(&todo)?;
     Ok(())
 }

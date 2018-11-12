@@ -10,6 +10,7 @@ mod dump_reading_list;
 mod extract_checkout;
 mod extract_timeline;
 mod format;
+mod housekeeping;
 mod log_done;
 mod merge_timelines;
 mod tickle;
@@ -77,6 +78,11 @@ enum Command {
     #[structopt(name = "format")]
     Format(format::CommandLineArguments),
 
+    /// Housekeeping after any file has changed. This includes extracting the timeline and the
+    /// checkout, as well as formatting todo and inbox.
+    #[structopt(name = "housekeeping")]
+    Housekeeping(housekeeping::CommandLineArguments),
+
     #[structopt(name = "search")]
     Search(SearchArgs),
 
@@ -129,24 +135,28 @@ fn main() {
             let results = taskpaper_file.search(&args.search).unwrap();
             print!(
                 "{}",
-                results.to_string(0, taskpaper::FormatOptions {
-                    sort: taskpaper::Sort::Nothing,
-                    print_children: if args.descendants {
-                        taskpaper::PrintChildren::Yes
-                    } else {
-                        taskpaper::PrintChildren::No
-                    },
-                    print_notes: if args.descendants {
-                        taskpaper::PrintNotes::Yes
-                    } else {
-                        taskpaper::PrintNotes::No
-                    },
-                    ..Default::default()
-                })
+                results.to_string(
+                    0,
+                    taskpaper::FormatOptions {
+                        sort: taskpaper::Sort::Nothing,
+                        print_children: if args.descendants {
+                            taskpaper::PrintChildren::Yes
+                        } else {
+                            taskpaper::PrintChildren::No
+                        },
+                        print_notes: if args.descendants {
+                            taskpaper::PrintNotes::Yes
+                        } else {
+                            taskpaper::PrintNotes::No
+                        },
+                        ..Default::default()
+                    }
+                )
             );
         }
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
+        Some(Command::Housekeeping(args)) => housekeeping::run(&args, &config).unwrap(),
         Some(Command::ExtractCheckout(args)) => extract_checkout::run(&args).unwrap(),
         Some(Command::ExtractTimeline(args)) => extract_timeline::run(&args, &config).unwrap(),
         Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),

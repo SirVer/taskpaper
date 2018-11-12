@@ -5,16 +5,15 @@ use taskpaper::{Entry, Error, Result, TaskpaperFile};
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
 
-pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn tickle(
+    inbox: &mut TaskpaperFile,
+    todo: &mut TaskpaperFile,
+    tickle: &mut TaskpaperFile,
+) -> Result<()> {
     // Remove tickle items from todo and inbox and add them to tickle.
     let mut entries = Vec::new();
-    let mut inbox = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox)?;
     entries.append(&mut inbox.filter("@tickle")?);
-
-    let mut todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
     entries.append(&mut todo.filter("@tickle")?);
-
-    let mut tickle = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Tickle)?;
     for mut e in entries {
         let tags = match e {
             Entry::Project(ref mut p) => Some(&mut p.tags),
@@ -46,9 +45,19 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
         today.format("%Y-%m-%d").to_string()
     ))?;
     inbox.entries.append(&mut to_inbox);
+    Ok(())
+}
+
+pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+    let mut inbox = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox)?;
+    let mut todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
+    let mut tickle_file = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Tickle)?;
+
+    tickle(&mut inbox, &mut todo, &mut tickle_file)?;
 
     todo.overwrite_common_file(taskpaper::CommonFileKind::Todo, config.formats["todo"])?;
     inbox.overwrite_common_file(taskpaper::CommonFileKind::Inbox, config.formats["inbox"])?;
-    tickle.overwrite_common_file(taskpaper::CommonFileKind::Tickle, config.formats["inbox"])?;
+    tickle_file
+        .overwrite_common_file(taskpaper::CommonFileKind::Tickle, config.formats["inbox"])?;
     Ok(())
 }

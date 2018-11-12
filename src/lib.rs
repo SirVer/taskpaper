@@ -109,7 +109,12 @@ impl Default for FormatOptions {
 }
 
 impl ToStringWithIndent for Project {
-    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+    fn append_to_string(
+        &self,
+        buf: &mut String,
+        indent: usize,
+        options: FormatOptions,
+    ) -> fmt::Result {
         let indent_str = "\t".repeat(indent);
         let mut tags = self.tags.iter().map(|t| t.to_string()).collect::<Vec<_>>();
         tags.sort();
@@ -134,10 +139,9 @@ impl ToStringWithIndent for Project {
 
         match options.print_children {
             PrintChildren::No => (),
-            PrintChildren::Yes => print_entries(
-                buf,
-                self.children.iter().collect(),
-                indent + 1, options)?,
+            PrintChildren::Yes => {
+                print_entries(buf, self.children.iter().collect(), indent + 1, options)?
+            }
         }
         Ok(())
     }
@@ -152,7 +156,12 @@ pub struct Task {
 }
 
 pub trait ToStringWithIndent {
-    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result;
+    fn append_to_string(
+        &self,
+        buf: &mut String,
+        indent: usize,
+        options: FormatOptions,
+    ) -> fmt::Result;
 
     fn to_string(&self, indent: usize, options: FormatOptions) -> String {
         let mut s = String::new();
@@ -193,7 +202,12 @@ impl Entry {
 }
 
 impl ToStringWithIndent for Entry {
-    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+    fn append_to_string(
+        &self,
+        buf: &mut String,
+        indent: usize,
+        options: FormatOptions,
+    ) -> fmt::Result {
         match self {
             Entry::Task(t) => t.append_to_string(buf, indent, options),
             Entry::Project(p) => p.append_to_string(buf, indent, options),
@@ -203,7 +217,12 @@ impl ToStringWithIndent for Entry {
 }
 
 impl ToStringWithIndent for Task {
-    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+    fn append_to_string(
+        &self,
+        buf: &mut String,
+        indent: usize,
+        options: FormatOptions,
+    ) -> fmt::Result {
         let indent_str = "\t".repeat(indent);
         let mut tags = self.tags.iter().collect::<Vec<Tag>>();
         tags.sort_by_key(|t| (t.value.is_some(), t.name.clone()));
@@ -231,7 +250,12 @@ impl ToStringWithIndent for Task {
 }
 
 impl ToStringWithIndent for [&Entry] {
-    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+    fn append_to_string(
+        &self,
+        buf: &mut String,
+        indent: usize,
+        options: FormatOptions,
+    ) -> fmt::Result {
         print_entries(buf, self.to_vec(), indent, options)?;
         Ok(())
     }
@@ -592,7 +616,12 @@ impl TaskpaperFile {
 }
 
 impl ToStringWithIndent for TaskpaperFile {
-    fn append_to_string(&self, buf: &mut String, indent: usize, options: FormatOptions) -> fmt::Result {
+    fn append_to_string(
+        &self,
+        buf: &mut String,
+        indent: usize,
+        options: FormatOptions,
+    ) -> fmt::Result {
         let entries: Vec<&Entry> = self.entries.iter().collect();
         &entries.append_to_string(buf, indent, options)?;
 

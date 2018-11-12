@@ -6,9 +6,7 @@ use taskpaper::{Error, Result, TaskpaperFile};
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
 
-pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
-    let todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
-
+pub fn extract_timeline(todo: &TaskpaperFile, config: &ConfigurationFile) -> Result<()> {
     let today = chrono::Local::now().naive_local().date();
     let mut timeline = TaskpaperFile::new();
     let entries = todo.search("@due")?;
@@ -62,5 +60,11 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
         taskpaper::CommonFileKind::Timeline,
         config.formats["timeline"],
     )?;
+    Ok(())
+}
+
+pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+    let todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
+    extract_timeline(&todo, config)?;
     Ok(())
 }
