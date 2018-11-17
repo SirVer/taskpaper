@@ -9,7 +9,7 @@ pub struct CommandLineArguments {}
 pub fn extract_timeline(todo: &TaskpaperFile, config: &ConfigurationFile) -> Result<()> {
     let today = chrono::Local::now().naive_local().date();
     let mut timeline = TaskpaperFile::new();
-    let entries = todo.search("@due")?;
+    let entries = todo.search("@due and not @done")?;
     let mut sorted = BTreeMap::new();
     for mut entry in entries.into_iter().cloned() {
         let tags = match entry {
