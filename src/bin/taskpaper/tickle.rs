@@ -10,6 +10,8 @@ pub fn tickle(
     todo: &mut TaskpaperFile,
     tickle: &mut TaskpaperFile,
 ) -> Result<()> {
+    // TODO(sirver): Maybe support 'every' tag, whenever we put something into the inbox from the
+    // tickle file, we readd it in. This is similar to 'repeat' implemented in 'log_done'.
     // Remove tickle items from todo and inbox and add them to tickle.
     let mut entries = Vec::new();
     entries.append(&mut inbox.filter("@tickle")?);

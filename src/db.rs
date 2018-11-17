@@ -61,10 +61,10 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CommonFileKind;
     use std::fs::File;
     use std::io::Write;
     use tempdir::TempDir;
-    use crate::CommonFileKind;
 
     /// Sets up a directory in which files can be dumped. This directory can be loaded as database,
     /// modified and then asserted over.
