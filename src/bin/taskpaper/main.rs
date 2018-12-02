@@ -1,9 +1,8 @@
 use self_update::cargo_crate_version;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{self, TaskpaperFile, ToStringWithIndent};
+use taskpaper;
 
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
@@ -13,6 +12,7 @@ mod format;
 mod housekeeping;
 mod log_done;
 mod merge_timelines;
+mod search;
 mod tickle;
 mod to_inbox;
 
@@ -20,6 +20,7 @@ mod to_inbox;
 pub struct ConfigurationFile {
     database: String,
     formats: HashMap<String, taskpaper::FormatOptions>,
+    aliases: HashMap<String, String>,
 }
 
 fn update() -> Result<(), Box<::std::error::Error>> {
@@ -51,20 +52,6 @@ struct CommandLineArguments {
 }
 
 #[derive(StructOpt, Debug)]
-struct SearchArgs {
-    /// File to read.
-    #[structopt(parse(from_os_str))]
-    input: PathBuf,
-
-    /// Search query to run against the file.
-    search: String,
-
-    /// Print descendants (notes & children) for results.
-    #[structopt(short = "-d")]
-    descendants: bool,
-}
-
-#[derive(StructOpt, Debug)]
 enum Command {
     /// Add items to the inbox.
     /// This is smart about ',' and '.' as first entries to add a note with the contents of the
@@ -84,7 +71,7 @@ enum Command {
     Housekeeping(housekeeping::CommandLineArguments),
 
     #[structopt(name = "search")]
-    Search(SearchArgs),
+    Search(search::CommandLineArguments),
 
     #[structopt(name = "extract_checkout")]
     ExtractCheckout(extract_checkout::CommandLineArguments),
@@ -130,30 +117,7 @@ fn main() {
     };
 
     match args.cmd {
-        Some(Command::Search(args)) => {
-            let taskpaper_file = TaskpaperFile::parse_file(args.input).unwrap();
-            let results = taskpaper_file.search(&args.search).unwrap();
-            print!(
-                "{}",
-                results.to_string(
-                    0,
-                    taskpaper::FormatOptions {
-                        sort: taskpaper::Sort::Nothing,
-                        print_children: if args.descendants {
-                            taskpaper::PrintChildren::Yes
-                        } else {
-                            taskpaper::PrintChildren::No
-                        },
-                        print_notes: if args.descendants {
-                            taskpaper::PrintNotes::Yes
-                        } else {
-                            taskpaper::PrintNotes::No
-                        },
-                        ..Default::default()
-                    }
-                )
-            );
-        }
+        Some(Command::Search(args)) => search::search(&args, &config).unwrap(),
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
         Some(Command::Housekeeping(args)) => housekeeping::run(&args, &config).unwrap(),

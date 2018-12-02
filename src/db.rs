@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 #[derive(Debug)]
 pub struct Database {
     pub root: PathBuf,
-    files: HashMap<PathBuf, TaskpaperFile>,
+    pub files: HashMap<PathBuf, TaskpaperFile>,
 }
 
 impl Database {
