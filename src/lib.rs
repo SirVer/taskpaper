@@ -612,6 +612,23 @@ impl TaskpaperFile {
         }
         None
     }
+
+    /// Call `f` on all entries in this file in order of appearance in the file, including all
+    /// children of projects.
+    pub fn map(&mut self, mut f: impl Fn(&mut Entry)) {
+        fn recurse(entries: &mut [Entry], f: &mut impl FnMut(&mut Entry)) {
+            for e in entries.iter_mut() {
+                f(e);
+                match e {
+                    Entry::Project(ref mut p) => {
+                        recurse(&mut p.children, f);
+                    }
+                    _ => (),
+                }
+            }
+        }
+        recurse(&mut self.entries, &mut f);
+    }
 }
 
 impl ToStringWithIndent for TaskpaperFile {

@@ -12,6 +12,7 @@ mod format;
 mod housekeeping;
 mod log_done;
 mod merge_timelines;
+mod purge_tags;
 mod search;
 mod tickle;
 mod to_inbox;
@@ -96,6 +97,10 @@ enum Command {
     #[cfg(target_os = "macos")]
     #[structopt(name = "dump_reading_list")]
     DumpReadingList(dump_reading_list::CommandLineArguments),
+
+    /// Remove all of the given tags in the given file.
+    #[structopt(name = "purge_tags")]
+    PurgeTags(purge_tags::CommandLineArguments),
 }
 
 fn main() {
@@ -126,6 +131,7 @@ fn main() {
         Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),
         Some(Command::LogDone(args)) => log_done::run(&args, &config).unwrap(),
         Some(Command::Tickle(args)) => tickle::run(&args, &config).unwrap(),
+        Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),
