@@ -4,7 +4,7 @@ use clipboard::{ClipboardContext, ClipboardProvider};
 use osascript::JavaScript;
 use std::io::{self, BufRead};
 use structopt::StructOpt;
-use taskpaper::Tags;
+use taskpaper::tag;
 use taskpaper::{Error, Result};
 
 #[derive(StructOpt, Debug)]
@@ -103,10 +103,16 @@ pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
             }
         }
 
+        let (without_tags, tags) = tag::extract_tags(l.to_string());
+        if without_tags.starts_with("http") {
+            let text = reqwest::get(&without_tags)
+                .and_then(|mut t| t.text());
+            println!("#sirver text: {:#?}", text);
+        }
+
         inbox.push(taskpaper::Entry::Task(taskpaper::Task {
-            text: l.to_string(),
-            // TODO(sirver): Hackish - we trust that tags get passed through in 'text'.
-            tags: Tags::new(),
+            text: without_tags,
+            tags: tags,
             note: if note_text.is_empty() {
                 None
             } else {
