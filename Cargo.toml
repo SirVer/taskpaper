@@ -2,7 +2,7 @@
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 edition = "2018"
 name = "taskpaper"
-version = "0.12.1"
+version = "0.12.2"
 
 [dependencies]
 base64 = "0.9.3"
@@ -16,8 +16,10 @@ self_update = "0.4.3"
 serde = "1.0.80"
 serde_derive = "1.0.0"
 shellexpand = "1.0.0"
+soup = "0.3.0"
 structopt = "0.2.12"
 tempdir = "0.3.7"
+textwrap = "0.10.0"
 toml = "0.4.8"
 walkdir = "2.2.5"
 

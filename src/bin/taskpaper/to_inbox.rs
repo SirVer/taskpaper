@@ -2,6 +2,7 @@
 use clipboard::{ClipboardContext, ClipboardProvider};
 #[cfg(target_os = "macos")]
 use osascript::JavaScript;
+use soup::{NodeExt, Soup};
 use std::io::{self, BufRead};
 use structopt::StructOpt;
 use taskpaper::tag;
@@ -76,21 +77,68 @@ pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
 
     let lines: Vec<String> = input.into_iter().filter(|l| !l.trim().is_empty()).collect();
 
-    for mut line in lines {
-        let mut l = line.trim();
+    for mut untrimmed_line in lines {
+        let mut line_with_tags = untrimmed_line.trim().to_string();
 
         if args.base64 {
-            let decoded = base64::decode(l).map_err(|_| {
+            let decoded = base64::decode(&line_with_tags).map_err(|_| {
                 Error::misc("Input not base64 encoded, though base64 decoding was requested.")
             })?;
-            line = String::from_utf8_lossy(&decoded).to_string();
-            l = line.trim();
+            untrimmed_line = String::from_utf8_lossy(&decoded).to_string();
+            line_with_tags = untrimmed_line.trim().to_string();
         }
 
         let mut note_text = Vec::new();
-        if l.starts_with(".") || l.starts_with(",") {
-            let clipboard = get_clipboard(l.chars().next().unwrap())?;
-            l = l[1..].trim();
+        let (mut line_without_tags, tags) = tag::extract_tags(line_with_tags);
+        if line_without_tags.starts_with("http") {
+            let _ = reqwest::Client::builder()
+                .redirect(reqwest::RedirectPolicy::limited(10))
+                .build()
+                .map(|client| {
+                    client
+                        .get(&line_without_tags)
+                        .send()
+                        .ok()
+                        .and_then(|resp| Soup::from_reader(resp).ok())
+                        .map(|soup| {
+                            let mut description_texts = Vec::new();
+                            // Find and push the title.
+                            soup.tag("title").find().map(|node| {
+                                let text = node.text().trim().to_string();
+                                if !text.is_empty() {
+                                    description_texts.push(text);
+                                }
+                            });
+                            let mut extra_notes = Vec::new();
+                            // Find and push the description.
+                            soup.tag("meta")
+                                .attr("name", "description")
+                                .find()
+                                .map(|node| {
+                                    node.attrs().get("content").map(|t| match t.len() {
+                                        0 => (),
+                                        1...100 => description_texts.push(t.to_string()),
+                                        _ => {
+                                            extra_notes.extend(
+                                                textwrap::wrap(t, 80)
+                                                    .into_iter()
+                                                    .map(|l| l.to_string()),
+                                            );
+                                        }
+                                    });
+                                });
+                            if !description_texts.is_empty() {
+                                note_text.push(line_without_tags.clone());
+                                note_text.extend(extra_notes.into_iter());
+                                line_without_tags = description_texts.join(" • ");
+                            }
+                        });
+                });
+        }
+
+        if line_without_tags.starts_with(".") || line_without_tags.starts_with(",") {
+            let clipboard = get_clipboard(line_without_tags.chars().next().unwrap())?;
+            line_without_tags = line_without_tags[1..].trim().to_string();
             note_text.push(clipboard.trim().to_string());
         }
 
@@ -103,15 +151,8 @@ pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
             }
         }
 
-        let (without_tags, tags) = tag::extract_tags(l.to_string());
-        if without_tags.starts_with("http") {
-            let text = reqwest::get(&without_tags)
-                .and_then(|mut t| t.text());
-            println!("#sirver text: {:#?}", text);
-        }
-
         inbox.push(taskpaper::Entry::Task(taskpaper::Task {
-            text: without_tags,
+            text: line_without_tags,
             tags: tags,
             note: if note_text.is_empty() {
                 None
