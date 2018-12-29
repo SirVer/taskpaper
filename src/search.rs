@@ -13,7 +13,6 @@ use crate::{Error, Result, Tags};
 // NOCOM(#sirver): remove panics here
 
 // TODO(sirver): No support for ordering or project limiting as of now.
-// TODO(sirver): Instead of taking String, we could also remember the span in the original string.
 #[derive(Debug, PartialEq, Clone)]
 enum TokenKind {
     /// A Tag, optionally with a value

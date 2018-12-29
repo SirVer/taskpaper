@@ -34,6 +34,7 @@ pub fn extract_checkout(todo: &TaskpaperFile) -> Result<()> {
         checkout
             .entries
             .push(taskpaper::Entry::Project(taskpaper::Project {
+                line_index: None,
                 text: title.to_string(),
                 note: None,
                 tags: taskpaper::Tags::new(),

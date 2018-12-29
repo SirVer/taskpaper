@@ -2,7 +2,7 @@ use crate::ConfigurationFile;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-use taskpaper::{db::Database, Entry, Result, TaskpaperFile, ToStringWithIndent};
+use taskpaper::{db::Database, Result, TaskpaperFile, ToStringWithIndent};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -51,40 +51,31 @@ pub fn search(args: &CommandLineArguments, config: &ConfigurationFile) -> Result
         results.insert(path as &Path, tpf.search(&query)?);
     }
 
-    let print_results = |results: &[&Entry], indent| {
-        print!(
-            "{}",
-            results.to_string(
-                indent,
-                taskpaper::FormatOptions {
-                    sort: taskpaper::Sort::Nothing,
-                    print_children: if args.descendants {
-                        taskpaper::PrintChildren::Yes
-                    } else {
-                        taskpaper::PrintChildren::No
-                    },
-                    print_notes: if args.descendants {
-                        taskpaper::PrintNotes::Yes
-                    } else {
-                        taskpaper::PrintNotes::No
-                    },
-                    ..Default::default()
-                }
-            )
-        );
+    let options = taskpaper::FormatOptions {
+        sort: taskpaper::Sort::Nothing,
+        print_children: if args.descendants {
+            taskpaper::PrintChildren::Yes
+        } else {
+            taskpaper::PrintChildren::No
+        },
+        print_notes: if args.descendants {
+            taskpaper::PrintNotes::Yes
+        } else {
+            taskpaper::PrintNotes::No
+        },
+        ..Default::default()
     };
 
-    if results.len() == 1 {
-        print_results(&results.into_iter().next().unwrap().1, 0)
-    } else {
-        let mut files: Vec<_> = results.keys().collect();
-        files.sort();
-        for f in files {
-            if results[f].is_empty() {
-                continue;
-            }
-            println!("{}:", f.display());
-            print_results(&results[f], 1)
+    let mut files: Vec<_> = results.keys().collect();
+    files.sort();
+    for f in files {
+        if results[f].is_empty() {
+            continue;
+        }
+        for result in &results[f] {
+            let line = result.line_index().unwrap() + 1;
+            let text = result.to_string(0, options);
+            print!("{}:{}:{}", f.display(), line, text);
         }
     }
 

@@ -80,6 +80,7 @@ pub fn dump_reading_list(args: &CommandLineArguments) {
             tpf.as_mut()
                 .unwrap()
                 .push(taskpaper::Entry::Task(taskpaper::Task {
+                    line_index: None,
                     tags,
                     text: title.trim().to_string(),
                     note: Some(url.trim().to_string()),

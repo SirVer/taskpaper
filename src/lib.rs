@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub enum Error {
     Misc(String),
-    Other(Box<dyn::std::error::Error>),
+    Other(Box<dyn ::std::error::Error>),
     Io(io::Error),
 }
 
@@ -22,8 +22,8 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<Box<dyn::std::error::Error>> for Error {
-    fn from(other: Box<dyn::std::error::Error>) -> Error {
+impl From<Box<dyn ::std::error::Error>> for Error {
+    fn from(other: Box<dyn ::std::error::Error>) -> Error {
         Error::Other(other)
     }
 }
@@ -38,6 +38,7 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Project {
+    pub line_index: Option<usize>,
     pub text: String,
     pub note: Option<Note>,
     pub tags: Tags,
@@ -152,6 +153,7 @@ pub struct Task {
     pub text: String,
     // TODO(sirver): Consider to use Note here instead of String.
     pub note: Option<String>,
+    pub line_index: Option<usize>,
 }
 
 pub trait ToStringWithIndent {
@@ -196,6 +198,14 @@ impl Entry {
         match *self {
             Entry::Project(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn line_index(&self) -> Option<usize> {
+        match self {
+            Entry::Project(p) => p.line_index,
+            Entry::Task(t) => t.line_index,
+            Entry::Note(_) => None,
         }
     }
 }
@@ -312,7 +322,7 @@ enum LineKind {
 }
 
 fn is_task(line: &str) -> bool {
-    line.trim_left().starts_with("- ")
+    line.trim_start().starts_with("- ")
 }
 
 fn indent(line: &str) -> usize {
@@ -320,7 +330,7 @@ fn indent(line: &str) -> usize {
 }
 
 fn is_project(line: &str) -> bool {
-    line.trim_right().ends_with(':')
+    line.trim_end().ends_with(':')
 }
 
 fn classify(line: &str) -> LineKind {
@@ -336,6 +346,7 @@ fn classify(line: &str) -> LineKind {
 
 #[derive(Debug)]
 struct LineToken {
+    line_index: usize,
     indent: usize,
     text: String,
     kind: LineKind,
@@ -351,8 +362,9 @@ fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Task {
     };
 
     Task {
+        line_index: Some(token.line_index),
         // Also trim the leading '- '
-        text: without_tags.trim()[1..].trim_left().to_string(),
+        text: without_tags.trim()[1..].trim_start().to_string(),
         tags,
         note,
     }
@@ -377,6 +389,7 @@ fn parse_project(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Project 
     }
 
     Project {
+        line_index: Some(token.line_index),
         // Also trim the trailing ':'
         text: without_tags[..without_tags.len() - 1].to_string(),
         note,
@@ -484,8 +497,10 @@ impl TaskpaperFile {
         let lines = input
             .trim()
             .lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(|line| LineToken {
+            .enumerate()
+            .filter(|(_line_index, line)| !line.trim().is_empty())
+            .map(|(line_index, line)| LineToken {
+                line_index: line_index,
                 indent: indent(line),
                 kind: classify(line),
                 text: line.trim().to_string(),
@@ -660,6 +675,7 @@ mod tests {
     fn test_simple_task_parse() {
         let input = r"- A task @tag1 @tag2";
         let golden = vec![Entry::Task(Task {
+            line_index: Some(0),
             text: "A task".to_string(),
             tags: {
                 let mut tags = Tags::new();
@@ -684,6 +700,7 @@ mod tests {
         let input = r"- A task @done(2018-08-05) @another(foo bar) @tag1 @tag2";
         let golden = vec![Entry::Task(Task {
             text: "A task".to_string(),
+            line_index: Some(0),
             tags: {
                 let mut tags = Tags::new();
                 tags.insert(Tag {

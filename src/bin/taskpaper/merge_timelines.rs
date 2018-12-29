@@ -1,5 +1,5 @@
-use chrono::NaiveDate;
 use crate::ConfigurationFile;
+use chrono::NaiveDate;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use taskpaper::{Entry, Error, Result, TaskpaperFile};

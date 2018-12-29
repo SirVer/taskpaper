@@ -1,5 +1,5 @@
-use chrono::NaiveDate;
 use crate::ConfigurationFile;
+use chrono::NaiveDate;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use taskpaper::Error;
@@ -23,6 +23,7 @@ fn log_to_logbook(done: Vec<Entry>, logbook: &mut TaskpaperFile) {
             Some(p) => p,
             None => {
                 logbook.entries.push(Entry::Project(taskpaper::Project {
+                    line_index: None,
                     text: parent_project.to_string(),
                     note: None,
                     tags: taskpaper::Tags::new(),

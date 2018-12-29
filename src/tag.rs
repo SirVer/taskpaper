@@ -235,6 +235,7 @@ impl Parser {
         ))
     }
 }
+
 fn find_tags(s: &str) -> Vec<(Tag, (usize, usize))> {
     let mut stream = CharStream::new(s);
     let mut tokens = Vec::new();

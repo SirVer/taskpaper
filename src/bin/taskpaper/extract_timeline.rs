@@ -50,6 +50,7 @@ pub fn extract_timeline(todo: &TaskpaperFile, config: &ConfigurationFile) -> Res
         timeline
             .entries
             .push(taskpaper::Entry::Project(taskpaper::Project {
+                line_index: None,
                 text: title.to_string(),
                 note: None,
                 tags: taskpaper::Tags::new(),

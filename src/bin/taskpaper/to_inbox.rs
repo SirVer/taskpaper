@@ -152,6 +152,7 @@ pub fn to_inbox(args: &CommandLineArguments) -> Result<()> {
         }
 
         inbox.push(taskpaper::Entry::Task(taskpaper::Task {
+            line_index: None,
             text: line_without_tags,
             tags: tags,
             note: if note_text.is_empty() {
