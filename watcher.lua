@@ -10,15 +10,15 @@ return {
       commands = {
          {
             name = "Running cargo check",
-            command = "cargo +nightly check --color=always",
+            command = "cargo check --color=always",
          },
          {
             name = "Running cargo test",
-            command = "cargo +nightly test --color=always",
+            command = "cargo test --color=always",
          },
          {
             name = "Running cargo build",
-            command = "cargo +nightly build --release --color=always",
+            command = "cargo build --release --color=always",
          },
       }
    },
