@@ -45,6 +45,16 @@ pub struct Project {
     pub children: Vec<Entry>,
 }
 
+impl Project {
+    pub fn push_back(&mut self, entry: Entry) {
+        self.children.push(entry);
+    }
+
+    pub fn push_front(&mut self, entry: Entry) {
+        self.children.insert(0, entry);
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Sort {
     // Do not change ordering of the items, print them as they arrive.
@@ -514,8 +524,12 @@ impl TaskpaperFile {
         Ok(TaskpaperFile { entries })
     }
 
-    pub fn push(&mut self, entry: Entry) {
+    pub fn push_back(&mut self, entry: Entry) {
         self.entries.push(entry);
+    }
+
+    pub fn push_front(&mut self, entry: Entry) {
+        self.entries.insert(0, entry);
     }
 
     pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {

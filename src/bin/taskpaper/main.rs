@@ -123,7 +123,7 @@ fn main() {
 
     match args.cmd {
         Some(Command::Search(args)) => search::search(&args, &config).unwrap(),
-        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args).unwrap(),
+        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args, &config).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
         Some(Command::Housekeeping(args)) => housekeeping::run(&args, &config).unwrap(),
         Some(Command::ExtractCheckout(args)) => extract_checkout::run(&args).unwrap(),
