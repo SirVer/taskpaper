@@ -89,17 +89,17 @@ pub fn line_to_task(
 ) -> Result<taskpaper::Entry> {
     let mut line_with_tags = line.trim().to_string();
 
-    for t in additional_tags {
-        line_with_tags.push(' ');
-        line_with_tags.push_str(t);
-    }
-
     if base64 {
         let decoded = base64::decode(&line_with_tags).map_err(|_| {
             Error::misc("Input not base64 encoded, though base64 decoding was requested.")
         })?;
         line = String::from_utf8_lossy(&decoded).to_string();
         line_with_tags = line.trim().to_string();
+    }
+
+    for t in additional_tags {
+        line_with_tags.push(' ');
+        line_with_tags.push_str(t);
     }
 
     let mut note_text = Vec::new();
