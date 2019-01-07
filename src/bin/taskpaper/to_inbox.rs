@@ -12,6 +12,10 @@ use taskpaper::{Error, Result};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
+    /// Verbatim - ignore '.' and ',' for clipboard and do not expand urls.
+    #[structopt(long = "--verbatim")]
+    verbatim: bool,
+
     /// Add a link to the currently selected mail message to the item.
     #[structopt(short = "-m", long = "--mail")]
     mail: bool,
@@ -84,6 +88,7 @@ fn get_clipboard(which: char) -> Result<String> {
 pub fn line_to_task(
     mut line: String,
     base64: bool,
+    verbatim: bool,
     mail: bool,
     additional_tags: &[String],
 ) -> Result<taskpaper::Entry> {
@@ -105,56 +110,58 @@ pub fn line_to_task(
     let mut note_text = Vec::new();
     let (mut line_without_tags, tags) = tag::extract_tags(line_with_tags);
 
-    if line_without_tags.starts_with("http") {
-        let _ = reqwest::Client::builder()
-            .redirect(reqwest::RedirectPolicy::limited(10))
-            .build()
-            .map(|client| {
-                client
-                    .get(&line_without_tags)
-                    .send()
-                    .ok()
-                    .and_then(|resp| Soup::from_reader(resp).ok())
-                    .map(|soup| {
-                        let mut description_texts = Vec::new();
-                        // Find and push the title.
-                        soup.tag("title").find().map(|node| {
-                            let text = node.text().trim().to_string();
-                            if !text.is_empty() {
-                                description_texts.push(text);
+    if !verbatim {
+        if line_without_tags.starts_with("http") {
+            let _ = reqwest::Client::builder()
+                .redirect(reqwest::RedirectPolicy::limited(10))
+                .build()
+                .map(|client| {
+                    client
+                        .get(&line_without_tags)
+                        .send()
+                        .ok()
+                        .and_then(|resp| Soup::from_reader(resp).ok())
+                        .map(|soup| {
+                            let mut description_texts = Vec::new();
+                            // Find and push the title.
+                            soup.tag("title").find().map(|node| {
+                                let text = node.text().trim().to_string();
+                                if !text.is_empty() {
+                                    description_texts.push(text);
+                                }
+                            });
+                            let mut extra_notes = Vec::new();
+                            // Find and push the description.
+                            soup.tag("meta")
+                                .attr("name", "description")
+                                .find()
+                                .map(|node| {
+                                    node.attrs().get("content").map(|t| match t.len() {
+                                        0 => (),
+                                        1...100 => description_texts.push(t.to_string()),
+                                        _ => {
+                                            extra_notes.extend(
+                                                textwrap::wrap(t, 80)
+                                                    .into_iter()
+                                                    .map(|l| l.to_string()),
+                                            );
+                                        }
+                                    });
+                                });
+                            if !description_texts.is_empty() {
+                                note_text.push(line_without_tags.clone());
+                                note_text.extend(extra_notes.into_iter());
+                                line_without_tags = description_texts.join(" • ");
                             }
                         });
-                        let mut extra_notes = Vec::new();
-                        // Find and push the description.
-                        soup.tag("meta")
-                            .attr("name", "description")
-                            .find()
-                            .map(|node| {
-                                node.attrs().get("content").map(|t| match t.len() {
-                                    0 => (),
-                                    1...100 => description_texts.push(t.to_string()),
-                                    _ => {
-                                        extra_notes.extend(
-                                            textwrap::wrap(t, 80)
-                                                .into_iter()
-                                                .map(|l| l.to_string()),
-                                        );
-                                    }
-                                });
-                            });
-                        if !description_texts.is_empty() {
-                            note_text.push(line_without_tags.clone());
-                            note_text.extend(extra_notes.into_iter());
-                            line_without_tags = description_texts.join(" • ");
-                        }
-                    });
-            });
-    }
+                });
+        }
 
-    if line_without_tags.starts_with(".") || line_without_tags.starts_with(",") {
-        let clipboard = get_clipboard(line_without_tags.chars().next().unwrap())?;
-        line_without_tags = line_without_tags[1..].trim().to_string();
-        note_text.push(clipboard.trim().to_string());
+        if line_without_tags.starts_with(".") || line_without_tags.starts_with(",") {
+            let clipboard = get_clipboard(line_without_tags.chars().next().unwrap())?;
+            line_without_tags = line_without_tags[1..].trim().to_string();
+            note_text.push(clipboard.trim().to_string());
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -179,7 +186,13 @@ pub fn line_to_task(
 
 pub fn to_inbox(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let mut tpf = match &args.file {
-        Some(f) => taskpaper::TaskpaperFile::parse_file(f)?,
+        Some(f) => {
+            if f.exists() {
+                taskpaper::TaskpaperFile::parse_file(f)?
+            } else {
+                taskpaper::TaskpaperFile::new()
+            }
+        }
         None => taskpaper::TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox)?,
     };
 
@@ -208,7 +221,7 @@ pub fn to_inbox(args: &CommandLineArguments, config: &ConfigurationFile) -> Resu
     let lines: Vec<String> = input.into_iter().filter(|l| !l.trim().is_empty()).collect();
 
     for line in lines {
-        let task = line_to_task(line, args.base64, args.mail, &args.tags)?;
+        let task = line_to_task(line, args.base64, args.verbatim, args.mail, &args.tags)?;
         match &args.project {
             None => {
                 if args.prepend {
