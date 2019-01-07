@@ -8,6 +8,7 @@ use taskpaper;
 mod dump_reading_list;
 mod extract_checkout;
 mod extract_timeline;
+mod filter;
 mod format;
 mod housekeeping;
 mod log_done;
@@ -101,6 +102,10 @@ enum Command {
     /// Remove all of the given tags in the given file.
     #[structopt(name = "purge_tags")]
     PurgeTags(purge_tags::CommandLineArguments),
+
+    /// Remove all items matching the query from the input
+    #[structopt(name = "filter_out")]
+    Filter(filter::CommandLineArguments),
 }
 
 fn main() {
@@ -132,6 +137,7 @@ fn main() {
         Some(Command::LogDone(args)) => log_done::run(&args, &config).unwrap(),
         Some(Command::Tickle(args)) => tickle::run(&args, &config).unwrap(),
         Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
+        Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),
