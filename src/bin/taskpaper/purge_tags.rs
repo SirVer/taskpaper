@@ -12,9 +12,6 @@ pub struct CommandLineArguments {
     /// Tags to purge (including the @).
     tags: Vec<String>,
 
-    /// Delete the items with this tag completely.
-    delete: bool,
-
     /// Style to format with. The default is 'default'.
     #[structopt(short = "-s", long = "--style", default_value = "default")]
     style: String,
