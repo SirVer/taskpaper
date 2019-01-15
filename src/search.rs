@@ -141,16 +141,33 @@ impl Value {
     }
 
     fn less_equal(self, o: Value) -> Value {
-        let other = self.equal(&o);
-        self.less(o).or(other)
+        match (self, o) {
+            (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
+            (Value::Bool(_), Value::String(_)) => Value::Undefined,
+            (Value::String(_), Value::Bool(_)) => Value::Undefined,
+            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a <= b),
+            (Value::String(a), Value::String(b)) => Value::Bool(a <= b),
+        }
     }
 
     fn greater(self, o: Value) -> Value {
-        self.less_equal(o).not()
+        match (self, o) {
+            (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
+            (Value::Bool(_), Value::String(_)) => Value::Undefined,
+            (Value::String(_), Value::Bool(_)) => Value::Undefined,
+            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a > b),
+            (Value::String(a), Value::String(b)) => Value::Bool(a > b),
+        }
     }
 
     fn greater_equal(self, o: Value) -> Value {
-        self.less(o).not()
+        match (self, o) {
+            (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
+            (Value::Bool(_), Value::String(_)) => Value::Undefined,
+            (Value::String(_), Value::Bool(_)) => Value::Undefined,
+            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a >= b),
+            (Value::String(a), Value::String(b)) => Value::Bool(a >= b),
+        }
     }
 }
 
