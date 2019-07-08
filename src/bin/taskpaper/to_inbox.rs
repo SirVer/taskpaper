@@ -172,15 +172,34 @@ pub fn line_to_task(
         }
     }
 
+    // Make sure the line does not contain a newline and does not end with ':'
+    line_without_tags = line_without_tags
+        .replace('\n', " ")
+        .trim_end_matches(':')
+        .to_string();
+
+    // Make sure none of the note texts end with ':'.
+    let note = if note_text.is_empty() {
+        None
+    } else {
+        let t = note_text
+            .join("\n")
+            .split("\n")
+            .map(|l| l.trim_end().trim_end_matches(':'))
+            .collect::<Vec<_>>()
+            .join("\n").trim().to_string();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t)
+        }
+    };
+
     Ok(taskpaper::Entry::Task(taskpaper::Task {
         line_index: None,
         text: line_without_tags,
-        tags: tags,
-        note: if note_text.is_empty() {
-            None
-        } else {
-            Some(note_text.join("\n"))
-        },
+        tags,
+        note,
     }))
 }
 
