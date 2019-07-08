@@ -187,7 +187,9 @@ pub fn line_to_task(
             .split("\n")
             .map(|l| l.trim_end().trim_end_matches(':'))
             .collect::<Vec<_>>()
-            .join("\n").trim().to_string();
+            .join("\n")
+            .trim()
+            .to_string();
         if t.is_empty() {
             None
         } else {
