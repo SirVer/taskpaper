@@ -453,7 +453,7 @@ fn lex(input: &str) -> Result<Vec<Token>> {
             '(' => tokens.push(Token::new(LeftParen, position, 1)),
             ')' => tokens.push(Token::new(RightParen, position, 1)),
             ' ' | '\t' => (),
-            'a'...'z' | 'A'...'Z' => tokens.push(lex_keyword(input, position, &mut stream)?),
+            'a'..='z' | 'A'..='Z' => tokens.push(lex_keyword(input, position, &mut stream)?),
             '!' => {
                 if stream.is_next('=') {
                     tokens.push(Token::new(BangEqual, position, 2));

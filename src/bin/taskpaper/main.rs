@@ -1,5 +1,5 @@
 use self_update::cargo_crate_version;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use structopt::StructOpt;
 use taskpaper;
@@ -25,7 +25,7 @@ pub struct ConfigurationFile {
     aliases: HashMap<String, String>,
 }
 
-fn update() -> Result<(), Box<::std::error::Error>> {
+fn update() -> Result<(), Box<dyn ::std::error::Error>> {
     let target = self_update::get_target()?;
     self_update::backends::github::Update::configure()?
         .repo_owner("SirVer")

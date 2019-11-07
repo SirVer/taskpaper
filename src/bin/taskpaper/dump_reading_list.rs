@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 use plist::serde::deserialize;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::File;
 use structopt::StructOpt;

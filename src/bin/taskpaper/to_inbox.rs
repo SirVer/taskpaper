@@ -138,7 +138,7 @@ pub fn line_to_task(
                                 .map(|node| {
                                     node.attrs().get("content").map(|t| match t.len() {
                                         0 => (),
-                                        1...100 => description_texts.push(t.to_string()),
+                                        1..=100 => description_texts.push(t.to_string()),
                                         _ => {
                                             extra_notes.extend(
                                                 textwrap::wrap(t, 80)

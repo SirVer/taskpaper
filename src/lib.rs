@@ -3,7 +3,7 @@ pub mod search;
 pub mod tag;
 
 pub use crate::tag::{Tag, Tags};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Write};
 use std::io;
 use std::iter::Peekable;
