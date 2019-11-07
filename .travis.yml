@@ -14,8 +14,6 @@ matrix:
     # Linux
     - env: TARGET=armv7-unknown-linux-gnueabihf
       rust: stable
-    - env: TARGET=i686-unknown-linux-musl
-      rust: stable
     - env: TARGET=x86_64-unknown-linux-musl
       rust: stable
 
