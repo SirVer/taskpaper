@@ -3,7 +3,7 @@ use crate::ConfigurationFile;
 use clipboard::{ClipboardContext, ClipboardProvider};
 #[cfg(target_os = "macos")]
 use osascript::JavaScript;
-use soup::{NodeExt, Soup};
+use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;

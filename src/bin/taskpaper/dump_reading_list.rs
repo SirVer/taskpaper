@@ -1,8 +1,6 @@
 use chrono::prelude::*;
-use plist::serde::deserialize;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs::File;
 use structopt::StructOpt;
 use taskpaper::Tags;
 
@@ -39,8 +37,7 @@ struct Entry {
 
 pub fn dump_reading_list(args: &CommandLineArguments) {
     let home = dirs::home_dir().expect("HOME not set.");
-    let file = File::open(&home.join("Library/Safari/Bookmarks.plist")).unwrap();
-    let plist: Entry = deserialize(file).unwrap();
+    let plist: Entry = plist::from_file(&home.join("Library/Safari/Bookmarks.plist")).unwrap();
     let c = plist
         .children
         .unwrap()
