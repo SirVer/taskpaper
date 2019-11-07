@@ -353,7 +353,7 @@ fn print_entries(
         Sort::ProjectsFirst => entries.sort_by_key(|a| !a.is_project()),
     }
 
-    let maybe_empty_line = |buf: &mut String, idx: usize| {
+    let maybe_empty_line = |buf: &mut String, idx: usize| -> fmt::Result {
         // Only if there is a next item and that is a project do we actually print a new line.
         if let Some(s) = entries.get(idx + 1) {
             if s.is_project() {
