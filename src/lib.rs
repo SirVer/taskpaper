@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 pub enum Error {
     Misc(String),
     Other(Box<dyn ::std::error::Error>),
+    Reqwest(reqwest::Error),
     Io(io::Error),
 }
 
@@ -28,6 +29,12 @@ impl From<Box<dyn ::std::error::Error>> for Error {
     }
 }
 
+impl From<reqwest::Error> for Error {
+    fn from(other: reqwest::Error) -> Error {
+        Error::Reqwest(other)
+    }
+}
+
 impl Error {
     pub fn misc(text: impl Into<String>) -> Self {
         Error::Misc(text.into())
@@ -35,6 +42,60 @@ impl Error {
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;
+
+fn sanitize(entry: Entry) -> Entry {
+    // Make sure the line does not contain a newline and does not end with ':'
+    fn sanitize_note(s: Option<String>) -> Option<String> {
+        match s {
+            None => None,
+            Some(s) => {
+                let t = s
+                    .split("\n")
+                    .map(|l| l.trim_end().trim_end_matches(':'))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .trim()
+                    .to_string();
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(t)
+                }
+            }
+        }
+    }
+
+    // Make sure none of the note texts end with ':'.
+    fn sanitize_text(s: String) -> String {
+        s.replace('\n', " ").trim_end_matches(':').to_string()
+    }
+
+    match entry {
+        Entry::Task(t) => Entry::Task(Task {
+            tags: t.tags,
+            text: sanitize_text(t.text),
+            note: sanitize_note(t.note),
+            line_index: t.line_index,
+        }),
+        Entry::Project(p) => {
+            let note = match p.note {
+                None => None,
+                Some(n) => {
+                    let new_text = sanitize_note(Some(n.text));
+                    new_text.map(|text| Note { text })
+                }
+            };
+            Entry::Project(Project {
+                line_index: p.line_index,
+                text: sanitize_text(p.text),
+                note,
+                tags: p.tags,
+                children: p.children.into_iter().map(|e| sanitize(e)).collect(),
+            })
+        }
+        Entry::Note(n) => Entry::Note(n),
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Project {
@@ -47,11 +108,11 @@ pub struct Project {
 
 impl Project {
     pub fn push_back(&mut self, entry: Entry) {
-        self.children.push(entry);
+        self.children.push(sanitize(entry));
     }
 
     pub fn push_front(&mut self, entry: Entry) {
-        self.children.insert(0, entry);
+        self.children.insert(0, sanitize(entry));
     }
 }
 
@@ -525,11 +586,11 @@ impl TaskpaperFile {
     }
 
     pub fn push_back(&mut self, entry: Entry) {
-        self.entries.push(entry);
+        self.entries.push(sanitize(entry));
     }
 
     pub fn push_front(&mut self, entry: Entry) {
-        self.entries.insert(0, entry);
+        self.entries.insert(0, sanitize(entry));
     }
 
     pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {
@@ -762,8 +823,7 @@ mod tests {
             "- Arbeit • Foo • blah @blocked(arg prs) @coding @next @done(2018-06-21)",
         )
         .unwrap();
-        let golden =
-            "- Arbeit • Foo • blah @coding @next @blocked(arg prs) @done(2018-06-21)\n";
+        let golden = "- Arbeit • Foo • blah @coding @next @blocked(arg prs) @done(2018-06-21)\n";
         assert_eq!(golden, tpf.to_string(0, FormatOptions::default()));
     }
 }

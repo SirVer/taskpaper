@@ -3,7 +3,6 @@ use crate::ConfigurationFile;
 use clipboard::{ClipboardContext, ClipboardProvider};
 #[cfg(target_os = "macos")]
 use osascript::JavaScript;
-use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -111,50 +110,12 @@ pub fn line_to_task(
     let (mut line_without_tags, tags) = tag::extract_tags(line_with_tags);
 
     if !verbatim {
-        if line_without_tags.starts_with("http") {
-            let _ = reqwest::Client::builder()
-                .redirect(reqwest::RedirectPolicy::limited(10))
-                .build()
-                .map(|client| {
-                    client
-                        .get(&line_without_tags)
-                        .send()
-                        .ok()
-                        .and_then(|resp| Soup::from_reader(resp).ok())
-                        .map(|soup| {
-                            let mut description_texts = Vec::new();
-                            // Find and push the title.
-                            soup.tag("title").find().map(|node| {
-                                let text = node.text().trim().to_string();
-                                if !text.is_empty() {
-                                    description_texts.push(text);
-                                }
-                            });
-                            let mut extra_notes = Vec::new();
-                            // Find and push the description.
-                            soup.tag("meta")
-                                .attr("name", "description")
-                                .find()
-                                .map(|node| {
-                                    node.attrs().get("content").map(|t| match t.len() {
-                                        0 => (),
-                                        1..=100 => description_texts.push(t.to_string()),
-                                        _ => {
-                                            extra_notes.extend(
-                                                textwrap::wrap(t, 80)
-                                                    .into_iter()
-                                                    .map(|l| l.to_string()),
-                                            );
-                                        }
-                                    });
-                                });
-                            if !description_texts.is_empty() {
-                                note_text.push(line_without_tags.clone());
-                                note_text.extend(extra_notes.into_iter());
-                                line_without_tags = description_texts.join(" • ");
-                            }
-                        });
-                });
+        match crate::check_feeds::get_summary_blocking(&line_without_tags) {
+            Ok(Some(summary)) => {
+                note_text.extend(summary.note_text.into_iter());
+                line_without_tags = summary.title;
+            }
+            _ => (),
         }
 
         if line_without_tags.starts_with(".") || line_without_tags.starts_with(",") {
@@ -172,29 +133,10 @@ pub fn line_to_task(
         }
     }
 
-    // Make sure the line does not contain a newline and does not end with ':'
-    line_without_tags = line_without_tags
-        .replace('\n', " ")
-        .trim_end_matches(':')
-        .to_string();
-
-    // Make sure none of the note texts end with ':'.
     let note = if note_text.is_empty() {
         None
     } else {
-        let t = note_text
-            .join("\n")
-            .split("\n")
-            .map(|l| l.trim_end().trim_end_matches(':'))
-            .collect::<Vec<_>>()
-            .join("\n")
-            .trim()
-            .to_string();
-        if t.is_empty() {
-            None
-        } else {
-            Some(t)
-        }
+        Some(note_text.join("\n"))
     };
 
     Ok(taskpaper::Entry::Task(taskpaper::Task {

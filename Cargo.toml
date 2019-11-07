@@ -8,10 +8,12 @@ version = "0.13.6"
 base64 = "0.11.0"
 chrono = { version = "0.4.9", features = ["serde"] }
 dirs = "2.0.2"
+dtparse = "1.0.3"
+futures = "0.3.0-alpha.19"
 lazy_static = "1.2.0"
 path-absolutize = "1.1.1"
 regex = "1.0.6"
-reqwest = "0.9.5"
+reqwest = { version = "0.10.0-alpha.1", features = ["blocking"] }
 rprompt = "1.0.3"
 self_update = "0.7.0"
 serde = { version = "1.0.102", features = [ "derive" ] }
@@ -19,8 +21,10 @@ sha1 = { version = "0.6.0", features = ["std"] }
 shellexpand = "1.0.0"
 soup = "0.4.1"
 structopt = "0.3.3"
+syndication = "0.5.0"
 tempdir = "0.3.7"
 textwrap = "0.11.0"
+tokio = "0.2.0-alpha.6"
 toml = "0.5.5"
 walkdir = "2.2.5"
 
@@ -31,3 +35,5 @@ pretty_assertions = "0.6.1"
 clipboard = "0.5.0"
 osascript = "0.3.0"
 plist = "0.5.0"
+
+

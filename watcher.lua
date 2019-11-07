@@ -18,7 +18,11 @@ return {
          },
          {
             name = "Running cargo build",
-            command = "cargo build --release --color=always",
+            command = "cargo build --color=always",
+         },
+         {
+            name = "Running cargo clippy",
+            command = "cargo clippy --color=always",
          },
       }
    },

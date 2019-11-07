@@ -11,10 +11,7 @@ pub fn extract_checkout(todo: &TaskpaperFile) -> Result<()> {
         ("Reading", "@reading and not @done and not @req_login"),
         ("Watching", "@watching and not @done and not @req_login"),
         ("Listening", "@listening and not @done and not @req_login"),
-        (
-            "Arbeit • Reading",
-            "@reading and not @done and @req_login",
-        ),
+        ("Arbeit • Reading", "@reading and not @done and @req_login"),
         (
             "Arbeit • Watching",
             "@watching and not @done and @req_login",

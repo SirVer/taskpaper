@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use structopt::StructOpt;
 use taskpaper;
 
+mod check_feeds;
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
 mod extract_checkout;
@@ -23,6 +24,7 @@ pub struct ConfigurationFile {
     database: String,
     formats: HashMap<String, taskpaper::FormatOptions>,
     aliases: HashMap<String, String>,
+    feeds: Vec<String>,
 }
 
 fn update() -> Result<(), Box<dyn ::std::error::Error>> {
@@ -54,6 +56,7 @@ struct CommandLineArguments {
 }
 
 #[derive(StructOpt, Debug)]
+#[structopt(rename_all = "verbatim")]
 enum Command {
     /// Add items to the inbox.
     /// This is smart about ',' and '.' as first entries to add a note with the contents of the
@@ -106,6 +109,10 @@ enum Command {
     /// Remove all items matching the query from the input
     #[structopt(name = "filter_out")]
     Filter(filter::CommandLineArguments),
+
+    /// Checks all configured RSS feeds and puts them into the Inbox.
+    #[structopt(name = "check_feeds")]
+    CheckFeeds(check_feeds::CommandLineArguments),
 }
 
 fn main() {
@@ -138,6 +145,7 @@ fn main() {
         Some(Command::Tickle(args)) => tickle::run(&args, &config).unwrap(),
         Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
         Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
+        Some(Command::CheckFeeds(args)) => check_feeds::run(&args, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),
