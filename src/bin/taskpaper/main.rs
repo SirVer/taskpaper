@@ -24,7 +24,7 @@ pub struct ConfigurationFile {
     database: String,
     formats: HashMap<String, taskpaper::FormatOptions>,
     aliases: HashMap<String, String>,
-    feeds: Vec<String>,
+    feeds: Vec<check_feeds::FeedConfiguration>,
 }
 
 fn update() -> Result<(), Box<dyn ::std::error::Error>> {

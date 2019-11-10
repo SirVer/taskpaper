@@ -1,5 +1,5 @@
-use crate::ConfigurationFile;
 use chrono::prelude::*;
+use crate::ConfigurationFile;
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::HashSet;
@@ -10,6 +10,21 @@ use syndication::Feed;
 use taskpaper::{Error, Result, TaskpaperFile};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+enum FeedPresentation { 
+    #[serde(rename = "feed")] 
+    FromFeed, 
+
+    #[serde(rename = "website")] 
+    FromWebsite,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FeedConfiguration {
+    url: String,
+    presentation: Option<FeedPresentation>,
+}
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -27,11 +42,11 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
 
         let feeds = read_feeds(&client, &config.feeds).await?;
         let mut rv = Vec::new();
-        for (feed, url) in feeds.into_iter().zip(&config.feeds) {
+        for (feed, feed_config) in feeds.into_iter().zip(&config.feeds) {
             match feed {
                 Ok(feed_entries) => rv.extend(feed_entries.into_iter()),
                 Err(e) => rv.push(TaskEntry {
-                    title: format!("Could not fetch RSS for '{}'.", url),
+                    title: format!("Could not fetch RSS for '{}'.", feed_config.url),
                     note_text: textwrap::wrap(&format!("{:?}", e), 80)
                         .into_iter()
                         .map(|l| l.to_string())
@@ -145,28 +160,43 @@ async fn get_summary(client: &reqwest::Client, url: &str) -> Result<Option<TaskE
 
 async fn get_summary_or_current_information(
     client: &reqwest::Client,
+    feed_presentation: FeedPresentation,
     url: &str,
     title: String,
+    content: String,
     published: Option<DateTime<Utc>>,
 ) -> Result<TaskEntry> {
-    let task = get_summary(client, url).await?;
-    match task {
-        Some(t) => Ok(t),
-        None => {
+    let task = match feed_presentation {
+        FeedPresentation::FromWebsite => get_summary(client, url).await?.expect("Did not receive a useful summary."),
+        FeedPresentation::FromFeed => {
             let mut note_text = vec![url.to_string()];
             if let Some(d) = published {
                 let local: DateTime<Local> = d.into();
-                note_text.push(format!("Published: {}", local.format("%Y-%m-%d")));
+                note_text
+                    .push(format!("Published: {}", local.format("%Y-%m-%d")));
             }
-            Ok(TaskEntry { title, note_text })
+            let content = html2text::from_read(io::Cursor::new(content), 80);
+            if !content.is_empty() {
+                let lines: Vec<String> = content
+                    .split('\n')
+                    .map(|s| s.to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                note_text.extend(match lines.len() {
+                    0..=100 => lines.into_iter().take(50),
+                    _ => lines.into_iter().take(15),
+                });
+            }
+            TaskEntry { title, note_text }
         }
-    }
+    };
+    Ok(task)
 }
 /// Returns a vector of same length then feeds, which contains either an Err if the feed could not
 /// be read or a list of entries that we did not see before on any prior run.
 async fn read_feeds(
     client: &reqwest::Client,
-    feeds: &[String],
+    feeds: &[FeedConfiguration],
 ) -> Result<Vec<Result<Vec<TaskEntry>>>> {
     let home = dirs::home_dir().expect("HOME not set.");
     let archive = home.join(TASKPAPER_RSS_DONE_FILE);
@@ -182,12 +212,14 @@ async fn read_feeds(
     let mut futures = Vec::new();
     let seen_ids_ref = &seen_ids;
     for feed in feeds {
+        let presentation = feed.presentation.unwrap_or(FeedPresentation::FromWebsite);
+
         futures.push(async move {
-            let body = get_page_body(client, feed).await?;
+            let body = get_page_body(client, &feed.url).await?;
             let mut entries = Vec::new();
             match body
                 .parse::<Feed>()
-                .map_err(|e| Error::misc(format!("Could not parse for {}: {}", feed, e)))?
+                .map_err(|e| Error::misc(format!("Could not parse for {}: {}", feed.url, e)))?
             {
                 Feed::RSS(channel) => {
                     for entry in channel.items() {
@@ -196,6 +228,7 @@ async fn read_feeds(
                             continue;
                         }
                         let published = parse_date(entry.pub_date());
+                        let content = entry.content().or(entry.description()).unwrap_or("");
                         let guid = entry
                             .guid()
                             .map(|g| g.value())
@@ -208,11 +241,17 @@ async fn read_feeds(
                             }
                         }
 
-                        let title = entry.title().unwrap_or_else(|| "No Title").to_string();
+                        let title = entry
+                            .title()
+                            .unwrap_or_else(|| "No Title")
+                            .trim()
+                            .to_string();
                         let task = get_summary_or_current_information(
                             client,
+                            presentation,
                             url.unwrap(),
                             title,
+                            content.to_string(),
                             published,
                         )
                         .await?;
@@ -231,6 +270,13 @@ async fn read_feeds(
                         if urls.is_empty() {
                             continue;
                         }
+                        let content = {
+                            entry
+                                .content()
+                                .and_then(|v| v.value())
+                                .or(entry.summary())
+                                .unwrap_or("")
+                        };
                         let guid = entry.id().to_string();
                         {
                             let seen_ids = seen_ids_ref.lock().unwrap();
@@ -240,11 +286,13 @@ async fn read_feeds(
                         }
 
                         let published = parse_date(entry.published());
-                        let title = entry.title().to_string();
+                        let title = entry.title().trim().to_string();
                         let task = get_summary_or_current_information(
                             client,
+                            presentation,
                             urls.first().unwrap(),
                             title,
+                            content.to_string(),
                             published,
                         )
                         .await?;

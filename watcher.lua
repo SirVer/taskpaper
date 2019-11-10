@@ -22,7 +22,7 @@ return {
          },
          {
             name = "Running cargo clippy",
-            command = "cargo clippy --color=always",
+            command = "cargo clippy --color=always -- -W clippy::pedantic",
          },
       }
    },
