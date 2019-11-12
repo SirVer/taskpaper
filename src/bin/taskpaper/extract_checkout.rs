@@ -40,10 +40,7 @@ pub fn extract_checkout(todo: &mut TaskpaperFile) -> Result<()> {
 
     checkout.overwrite_common_file(
         taskpaper::CommonFileKind::Checkout,
-        taskpaper::FormatOptions {
-            vim_read_only: taskpaper::VimReadOnly::Yes,
-            ..Default::default()
-        },
+        taskpaper::FormatOptions::default(),
     )?;
     Ok(())
 }

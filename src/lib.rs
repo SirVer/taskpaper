@@ -150,19 +150,11 @@ pub enum PrintNotes {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum VimReadOnly {
-    // TODO(sirver): Document.
-    Yes,
-    No,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FormatOptions {
     pub sort: Sort,
     pub print_children: PrintChildren,
     pub print_notes: PrintNotes,
     pub empty_line_after_project: EmptyLineAfterProject,
-    pub vim_read_only: VimReadOnly,
 }
 
 impl Default for FormatOptions {
@@ -176,7 +168,6 @@ impl Default for FormatOptions {
                 first_level: 1,
                 others: 0,
             },
-            vim_read_only: VimReadOnly::No,
         }
     }
 }
@@ -585,7 +576,7 @@ impl TaskpaperFile {
             .trim()
             .lines()
             .enumerate()
-            .filter(|(_line_index, line)| !line.trim().is_empty() && line.trim() != "vim:ro")
+            .filter(|(_line_index, line)| !line.trim().is_empty())
             .map(|(line_index, line)| LineToken {
                 line_index: line_index,
                 indent: indent(line),
@@ -776,12 +767,6 @@ impl ToStringWithIndent for TaskpaperFile {
         let entries: Vec<&Entry> = self.entries.iter().collect();
         &entries.append_to_string(buf, indent, options)?;
 
-        match options.vim_read_only {
-            VimReadOnly::No => (),
-            VimReadOnly::Yes => {
-                buf.push_str("\n\nvim:ro\n");
-            }
-        }
         Ok(())
     }
 }
