@@ -795,8 +795,6 @@ pub fn mirror_changes(
         match (&entries[0], e) {
             (Entry::Note(s), Entry::Note(d)) => d.text = s.text.clone(),
             (Entry::Project(s), Entry::Project(d)) => {
-                println!("#sirver s: {:#?}", s);
-                println!("#sirver d: {:#?}", d);
                 d.text = s.text.clone();
                 d.tags = s.tags.clone();
                 if s.note.is_some() {
@@ -916,8 +914,6 @@ mod tests {
             include_str!("tests/mirror_changes/destination.taskpaper"),
         );
         let mut destination = TaskpaperFile::parse_file(&destination_path).unwrap();
-
-        // NOCOM(#sirver): can this fails
         mirror_changes(&source, &mut destination).expect("Should work.");
         assert_eq!(
             &destination.to_string(0, FormatOptions::default()),
