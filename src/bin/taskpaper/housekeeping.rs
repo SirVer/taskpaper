@@ -20,7 +20,8 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     crate::tickle::tickle(&mut inbox, &mut todo, &mut tickle)?;
     crate::extract_checkout::extract_checkout(&mut todo)?;
     crate::extract_timeline::extract_timeline(&mut todo, config)?;
-
+    // It is very important to first write todo.taskpaper, so that the extract methods that might
+    // be run now on file change do not run into an infinite loop.
     todo.overwrite_common_file(taskpaper::CommonFileKind::Todo, config.formats["todo"])?;
     inbox.overwrite_common_file(taskpaper::CommonFileKind::Inbox, config.formats["inbox"])?;
     tickle.overwrite_common_file(taskpaper::CommonFileKind::Tickle, config.formats["inbox"])?;

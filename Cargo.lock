@@ -2489,7 +2489,7 @@ dependencies = [
 
 [[package]]
 name = "taskpaper"
-version = "0.14.2"
+version = "0.15.0"
 dependencies = [
  "base64 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",

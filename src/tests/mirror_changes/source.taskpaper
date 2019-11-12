@@ -1,0 +1,18 @@
+Some Project Name without meaning:
+	A project that is changed: @bar @foo
+	- Do the foo without the bar @reading @done(2019-11-12)
+		https://someurl.com/app/foo/bar.pdf
+	- Change the comment @reading
+		https://anotherurl.com/app/foo/bar.pdf
+	- This one does not exist @reading
+		https://blub.com/foobars/fl.pdf
+	- This one did not change @reading
+		https://www.ccc.de/foobar
+		Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed
+		diam nonumy eirmod tempor invidunt ut labore et dolore magna
+		aliquyam erat, sed diam voluptua. At vero eos et accusam et
+		justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea
+		takimata sanctus est Lorem ipsum dolor sit amet.
+	Another change: @bar @foo
+
+vim:ro
