@@ -18,8 +18,8 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let mut tickle = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Tickle)?;
 
     crate::tickle::tickle(&mut inbox, &mut todo, &mut tickle)?;
-    crate::extract_checkout::extract_checkout(&todo)?;
-    crate::extract_timeline::extract_timeline(&todo, config)?;
+    crate::extract_checkout::extract_checkout(&mut todo)?;
+    crate::extract_timeline::extract_timeline(&mut todo, config)?;
 
     todo.overwrite_common_file(taskpaper::CommonFileKind::Todo, config.formats["todo"])?;
     inbox.overwrite_common_file(taskpaper::CommonFileKind::Inbox, config.formats["inbox"])?;

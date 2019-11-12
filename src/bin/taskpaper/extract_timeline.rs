@@ -2,7 +2,10 @@ use crate::ConfigurationFile;
 use std::collections::BTreeMap;
 use taskpaper::{Error, Result, TaskpaperFile};
 
-pub fn extract_timeline(todo: &TaskpaperFile, config: &ConfigurationFile) -> Result<()> {
+pub fn extract_timeline(todo: &mut TaskpaperFile, config: &ConfigurationFile) -> Result<()> {
+    if let Some(path) = taskpaper::CommonFileKind::Timeline.find() {
+        taskpaper::mirror_changes(&path, todo)?;
+    }
     let today = chrono::Local::now().naive_local().date();
     let mut timeline = TaskpaperFile::new();
     let entries = todo.search("@due and not @done")?;

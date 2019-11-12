@@ -1,6 +1,8 @@
 pub mod db;
 pub mod search;
 pub mod tag;
+#[cfg(test)]
+pub mod testing;
 
 pub use crate::tag::{Tag, Tags};
 use serde::{Deserialize, Serialize};
@@ -279,6 +281,14 @@ impl Entry {
             Entry::Note(_) => None,
         }
     }
+
+    pub fn text(&self) -> &str {
+        match self {
+            Entry::Note(n) => &n.text,
+            Entry::Project(p) => &p.text,
+            Entry::Task(t) => &t.text,
+        }
+    }
 }
 
 impl ToStringWithIndent for Entry {
@@ -497,6 +507,9 @@ fn parse_entry(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Entry {
 #[derive(Debug)]
 pub struct TaskpaperFile {
     pub entries: Vec<Entry>,
+
+    /// If this was loaded from a file, this will be set to the path of that file.
+    path: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -510,7 +523,7 @@ pub enum CommonFileKind {
 }
 
 impl CommonFileKind {
-    fn find(&self) -> Option<PathBuf> {
+    pub fn find(&self) -> Option<PathBuf> {
         let home = dirs::home_dir().expect("HOME not set.");
         let path = match *self {
             CommonFileKind::Inbox => home.join("Dropbox/Tasks/01_inbox.taskpaper"),
@@ -544,6 +557,7 @@ impl TaskpaperFile {
     pub fn new() -> Self {
         TaskpaperFile {
             entries: Vec::new(),
+            path: None,
         }
     }
 
@@ -560,8 +574,10 @@ impl TaskpaperFile {
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
-        let text = ::std::fs::read_to_string(path)?;
-        Self::parse(&text)
+        let text = ::std::fs::read_to_string(&path)?;
+        let mut s = Self::parse(&text)?;
+        s.path = Some(path.as_ref().to_path_buf());
+        Ok(s)
     }
 
     pub fn parse(input: &str) -> Result<Self> {
@@ -569,7 +585,7 @@ impl TaskpaperFile {
             .trim()
             .lines()
             .enumerate()
-            .filter(|(_line_index, line)| !line.trim().is_empty())
+            .filter(|(_line_index, line)| !line.trim().is_empty() && line.trim() != "vim:ro")
             .map(|(line_index, line)| LineToken {
                 line_index: line_index,
                 indent: indent(line),
@@ -582,7 +598,10 @@ impl TaskpaperFile {
         while let Some(_) = it.peek() {
             entries.push(parse_entry(&mut it));
         }
-        Ok(TaskpaperFile { entries })
+        Ok(TaskpaperFile {
+            entries,
+            path: None,
+        })
     }
 
     pub fn push_back(&mut self, entry: Entry) {
@@ -634,6 +653,17 @@ impl TaskpaperFile {
             recurse(e, &expr, &mut out);
         }
         Ok(out)
+    }
+
+    /// Find all entries with exactly the given text.
+    pub fn get_entries(&self, text: &str) -> Vec<&Entry> {
+        let mut result = Vec::new();
+        self.map(|e| {
+            if e.text() == text {
+                result.push(e as &Entry);
+            }
+        });
+        result
     }
 
     /// Removes all items from 'self' that match 'query' and return them in the returned value.
@@ -705,7 +735,7 @@ impl TaskpaperFile {
 
     /// Call `f` on all entries in this file in order of appearance in the file, including all
     /// children of projects.
-    pub fn map(&mut self, mut f: impl Fn(&mut Entry)) {
+    pub fn map_mut(&mut self, mut f: impl Fn(&mut Entry)) {
         fn recurse(entries: &mut [Entry], f: &mut impl FnMut(&mut Entry)) {
             for e in entries.iter_mut() {
                 f(e);
@@ -718,6 +748,21 @@ impl TaskpaperFile {
             }
         }
         recurse(&mut self.entries, &mut f);
+    }
+
+    pub fn map<'a>(&'a self, mut f: impl FnMut(&'a Entry)) {
+        fn recurse<'b>(entries: &'b [Entry], f: &mut impl FnMut(&'b Entry)) {
+            for e in entries.iter() {
+                f(e);
+                match e {
+                    Entry::Project(ref p) => {
+                        recurse(&p.children, f);
+                    }
+                    _ => (),
+                }
+            }
+        }
+        recurse(&self.entries, &mut f);
     }
 }
 
@@ -741,9 +786,56 @@ impl ToStringWithIndent for TaskpaperFile {
     }
 }
 
+pub fn mirror_changes(
+    source_path: impl AsRef<Path>,
+    destination: &mut TaskpaperFile,
+) -> Result<()> {
+    if let Some(destination_path) = &destination.path {
+        let source_path = source_path.as_ref();
+        let source_changed = source_path.metadata()?.modified()?;
+        let destination_changed = destination_path.metadata()?.modified()?;
+        if destination_changed >= source_changed {
+            // Destination is newer than the source. We better not blindly overwrite.
+            return Ok(());
+        }
+    }
+
+    let source = TaskpaperFile::parse_file(source_path)?;
+    destination.map_mut(|e| {
+        let entries = source.get_entries(e.text());
+        if entries.is_empty() {
+            return;
+        }
+
+        match (&entries[0], e) {
+            (Entry::Note(s), Entry::Note(d)) => d.text = s.text.clone(),
+            (Entry::Project(s), Entry::Project(d)) => {
+                println!("#sirver s: {:#?}", s);
+                println!("#sirver d: {:#?}", d);
+                d.text = s.text.clone();
+                d.tags = s.tags.clone();
+                if s.note.is_some() {
+                    d.note = s.note.clone();
+                }
+            }
+            (Entry::Task(s), Entry::Task(d)) => {
+                d.text = s.text.clone();
+                d.tags = s.tags.clone();
+                if s.note.is_some() {
+                    d.note = s.note.clone();
+                }
+            }
+            _ => (),
+        };
+    });
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::*;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -825,5 +917,43 @@ mod tests {
         .unwrap();
         let golden = "- Arbeit • Foo • blah @coding @next @blocked(arg prs) @done(2018-06-21)\n";
         assert_eq!(golden, tpf.to_string(0, FormatOptions::default()));
+    }
+
+    #[test]
+    fn test_mirror_changes_nothing_happens_when_destination_is_newer() {
+        let test = DatabaseTest::new();
+        let source = test.write_file(
+            "source.taskpaper",
+            include_str!("tests/mirror_changes/source.taskpaper"),
+        );
+        let destination_path = test.write_file(
+            "destination.taskpaper",
+            include_str!("tests/mirror_changes/destination.taskpaper"),
+        );
+        let mut destination = TaskpaperFile::parse_file(&destination_path).unwrap();
+
+        // NOCOM(#sirver): can this fails
+        mirror_changes(&source, &mut destination).expect("Should work.");
+        assert_eq!(
+            &destination.to_string(0, FormatOptions::default()),
+            include_str!("tests/mirror_changes/destination.taskpaper"),
+        );
+    }
+
+    #[test]
+    fn test_mirror_changes() {
+        let test = DatabaseTest::new();
+        let mut destination =
+            TaskpaperFile::parse(include_str!("tests/mirror_changes/destination.taskpaper"))
+                .unwrap();
+        let source = test.write_file(
+            "source.taskpaper",
+            include_str!("tests/mirror_changes/source.taskpaper"),
+        );
+        mirror_changes(&source, &mut destination).expect("Should work");
+        assert_eq!(
+            &destination.to_string(0, FormatOptions::default()),
+            include_str!("tests/mirror_changes/destination_golden.taskpaper"),
+        );
     }
 }

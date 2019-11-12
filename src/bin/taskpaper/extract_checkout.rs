@@ -1,6 +1,9 @@
 use taskpaper::{Result, TaskpaperFile};
 
-pub fn extract_checkout(todo: &TaskpaperFile) -> Result<()> {
+pub fn extract_checkout(todo: &mut TaskpaperFile) -> Result<()> {
+    if let Some(path) = taskpaper::CommonFileKind::Checkout.find() {
+        taskpaper::mirror_changes(&path, todo)?;
+    }
     let mut checkout = TaskpaperFile::new();
 
     const PROJECTS: [(&str, &str); 6] = [

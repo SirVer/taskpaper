@@ -24,7 +24,7 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
     };
 
     let mut input = TaskpaperFile::parse_file(&args.input)?;
-    input.map(|entry| {
+    input.map_mut(|entry| {
         let tags = match entry {
             Entry::Project(ref mut p) => &mut p.tags,
             Entry::Task(ref mut t) => &mut t.tags,

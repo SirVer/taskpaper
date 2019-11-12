@@ -1,5 +1,5 @@
-use chrono::prelude::*;
 use crate::ConfigurationFile;
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::HashSet;
@@ -12,11 +12,11 @@ use taskpaper::{Error, Result, TaskpaperFile};
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
-enum FeedPresentation { 
-    #[serde(rename = "feed")] 
-    FromFeed, 
+enum FeedPresentation {
+    #[serde(rename = "feed")]
+    FromFeed,
 
-    #[serde(rename = "website")] 
+    #[serde(rename = "website")]
     FromWebsite,
 }
 
@@ -167,13 +167,14 @@ async fn get_summary_or_current_information(
     published: Option<DateTime<Utc>>,
 ) -> Result<TaskEntry> {
     let task = match feed_presentation {
-        FeedPresentation::FromWebsite => get_summary(client, url).await?.expect("Did not receive a useful summary."),
+        FeedPresentation::FromWebsite => get_summary(client, url)
+            .await?
+            .expect("Did not receive a useful summary."),
         FeedPresentation::FromFeed => {
             let mut note_text = vec![url.to_string()];
             if let Some(d) = published {
                 let local: DateTime<Local> = d.into();
-                note_text
-                    .push(format!("Published: {}", local.format("%Y-%m-%d")));
+                note_text.push(format!("Published: {}", local.format("%Y-%m-%d")));
             }
             let content = html2text::from_read(io::Cursor::new(content), 80);
             if !content.is_empty() {

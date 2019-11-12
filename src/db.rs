@@ -60,43 +60,8 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::testing::DatabaseTest;
     use crate::CommonFileKind;
-    use std::fs::File;
-    use std::io::Write;
-    use tempdir::TempDir;
-
-    /// Sets up a directory in which files can be dumped. This directory can be loaded as database,
-    /// modified and then asserted over.
-    #[derive(Debug)]
-    struct DatabaseTest {
-        dir: TempDir,
-        database: Option<Database>,
-    }
-
-    impl DatabaseTest {
-        fn new() -> Self {
-            let dir = TempDir::new("taskpaper_db_test").expect("Could not create tempdir.");
-            DatabaseTest {
-                dir,
-                database: None,
-            }
-        }
-
-        fn write_file(&mut self, path: impl AsRef<Path>, content: String) {
-            let file_path = self.dir.path().join(path);
-            let mut f = File::create(file_path).expect("Could not create file");
-            f.write_all(content.as_bytes())
-                .expect("Could not write file");
-            f.sync_all().unwrap();
-        }
-
-        pub fn read_database(&mut self) -> &mut Database {
-            self.database =
-                Some(Database::read(self.dir.path()).expect("Could not read database."));
-            self.database.as_mut().unwrap()
-        }
-    }
 
     // TODO(sirver): Actually add a few tests for tickling, timeline and so on?
     #[test]
@@ -104,13 +69,12 @@ mod tests {
         let mut t = DatabaseTest::new();
         t.write_file(
             CommonFileKind::Inbox.to_path_buf(),
-            "- to tickle @tickle(2018-10-01)\n".to_string(),
+            "- to tickle @tickle(2018-10-01)\n",
         );
         t.write_file(
             CommonFileKind::Tickle.to_path_buf(),
             "- before entry @tickle(2018-09-01)\n \
-             - after entry @tickle(2018-10-02)\n"
-                .to_string(),
+             - after entry @tickle(2018-10-02)\n",
         );
 
         let _db = t.read_database();
