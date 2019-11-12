@@ -78,12 +78,6 @@ enum Command {
     #[structopt(name = "search")]
     Search(search::CommandLineArguments),
 
-    #[structopt(name = "extract_checkout")]
-    ExtractCheckout(extract_checkout::CommandLineArguments),
-
-    #[structopt(name = "extract_timeline")]
-    ExtractTimeline(extract_timeline::CommandLineArguments),
-
     /// Merge one taskpaper file into another on a project level. All top level items that are not
     /// in both are appended to the end.
     #[structopt(name = "merge_timelines")]
@@ -92,10 +86,6 @@ enum Command {
     /// Log everything marked as done into the logbook.
     #[structopt(name = "log_done")]
     LogDone(log_done::CommandLineArguments),
-
-    /// Move stuff from tickle file into inbox and from inbox or todo into tickle.
-    #[structopt(name = "tickle")]
-    Tickle(tickle::CommandLineArguments),
 
     /// Dump reading list. Dumps the reading list as items ready to go into the Inbox.
     #[cfg(target_os = "macos")]
@@ -138,11 +128,8 @@ fn main() {
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args, &config).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
         Some(Command::Housekeeping(args)) => housekeeping::run(&args, &config).unwrap(),
-        Some(Command::ExtractCheckout(args)) => extract_checkout::run(&args).unwrap(),
-        Some(Command::ExtractTimeline(args)) => extract_timeline::run(&args, &config).unwrap(),
         Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),
         Some(Command::LogDone(args)) => log_done::run(&args, &config).unwrap(),
-        Some(Command::Tickle(args)) => tickle::run(&args, &config).unwrap(),
         Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
         Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
         Some(Command::CheckFeeds(args)) => check_feeds::run(&args, &config).unwrap(),

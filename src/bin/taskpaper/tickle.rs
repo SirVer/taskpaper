@@ -1,9 +1,4 @@
-use crate::ConfigurationFile;
-use structopt::StructOpt;
 use taskpaper::{Entry, Error, Result, TaskpaperFile};
-
-#[derive(StructOpt, Debug)]
-pub struct CommandLineArguments {}
 
 pub fn tickle(
     inbox: &mut TaskpaperFile,
@@ -47,19 +42,5 @@ pub fn tickle(
         today.format("%Y-%m-%d").to_string()
     ))?;
     inbox.entries.append(&mut to_inbox);
-    Ok(())
-}
-
-pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
-    let mut inbox = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox)?;
-    let mut todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
-    let mut tickle_file = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Tickle)?;
-
-    tickle(&mut inbox, &mut todo, &mut tickle_file)?;
-
-    todo.overwrite_common_file(taskpaper::CommonFileKind::Todo, config.formats["todo"])?;
-    inbox.overwrite_common_file(taskpaper::CommonFileKind::Inbox, config.formats["inbox"])?;
-    tickle_file
-        .overwrite_common_file(taskpaper::CommonFileKind::Tickle, config.formats["inbox"])?;
     Ok(())
 }
