@@ -2,7 +2,7 @@ use crate::ConfigurationFile;
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use structopt::StructOpt;
@@ -40,7 +40,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
             .redirect(reqwest::RedirectPolicy::limited(10))
             .build()?;
 
-        let feeds = read_feeds(&client, &config.feeds).await?;
+        let feeds = read_feeds(db, &client, &config.feeds).await?;
         let mut rv = Vec::new();
         for (feed, feed_config) in feeds.into_iter().zip(&config.feeds) {
             match feed {
@@ -82,7 +82,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct SeenIds {
-    seen_ids: HashSet<String>,
+    seen_ids: BTreeSet<String>,
 }
 
 /// Broken down information for tasks.
@@ -196,11 +196,11 @@ async fn get_summary_or_current_information(
 /// Returns a vector of same length then feeds, which contains either an Err if the feed could not
 /// be read or a list of entries that we did not see before on any prior run.
 async fn read_feeds(
+    db: &Database,
     client: &reqwest::Client,
     feeds: &[FeedConfiguration],
 ) -> Result<Vec<Result<Vec<TaskEntry>>>> {
-    let home = dirs::home_dir().expect("HOME not set.");
-    let archive = home.join(TASKPAPER_RSS_DONE_FILE);
+    let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
     let seen_ids = match fs::read_to_string(&archive) {
         Ok(data) => toml::from_str(&data)
             .map_err(|_| Error::misc(format!("Could not parse {}", archive.display())))?,
