@@ -1,7 +1,9 @@
 pub mod db;
 pub mod search;
 pub mod tag;
-#[cfg(test)]
+
+// TODO(sirver): This should only be in cfg(test), but since it is used in the binary which is the
+// only thing compiled with cfg test, it needs to be always included.
 pub mod testing;
 
 pub use crate::tag::{Tag, Tags};

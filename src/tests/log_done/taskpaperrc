@@ -1,0 +1,23 @@
+database = ""
+feeds = []
+
+[aliases]
+
+
+[formats.logbook]
+sort = 'Nothing'
+print_children = 'Yes'
+print_notes = 'Yes'
+empty_line_after_project = { top_level = 2, first_level = 0, others = 0 }
+
+[formats.todo]
+sort = 'ProjectsFirst'
+print_children = 'Yes'
+print_notes = 'Yes'
+empty_line_after_project = { top_level = 0, first_level = 1, others = 0 }
+
+[formats.inbox]
+sort = 'Nothing'
+print_children = 'Yes'
+print_notes = 'Yes'
+empty_line_after_project = { top_level = 0, first_level = 0, others = 0 }

@@ -1,0 +1,27 @@
+Wednesday, 13. November 2019:
+	- A project • Something to be logged and not unboxed @blub @done(2019-11-13) @foo(value)
+		[X] A box
+
+
+Sunday, 13. October 2019:
+	- A project • Something to be logged @blub @foo @done(2019-10-13)
+
+
+Friday, 13. July 2018:
+	- A project • A done project with some done and some undone tasks • This one is done @done(2018-07-13)
+	- A project • A done project with some done and some undone tasks • This one is done again @done(2018-07-13)
+	A project • A done project with some done and some undone tasks: @done(2018-07-13)
+		- This one is not @foo
+
+
+Saturday, 13. January 2018:
+	- A project • Repeat me • Something to be logged and repeated @blub @foo @done(2018-01-13) @repeat(1m)
+	- A project • Repeat me • Something to be logged and repeated and unboxed @blub @foo @done(2018-01-13) @repeat(1m)
+		[X] A checked box
+		[_] A unchecked box
+
+
+Monday, 13. November 2017:
+	- A project • A done project • An nested item that should be repeated and is done too @done(2017-11-13) @repeat(1m)
+		[X] A box
+	A project • A done project: @done(2017-11-13)

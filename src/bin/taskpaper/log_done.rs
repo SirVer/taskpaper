@@ -1,6 +1,7 @@
 use crate::ConfigurationFile;
 use chrono::NaiveDate;
 use lazy_static::lazy_static;
+use std::borrow::Cow;
 use structopt::StructOpt;
 use taskpaper::Error;
 use taskpaper::{Database, Entry, Result, Tag, TaskpaperFile};
@@ -44,11 +45,35 @@ fn log_to_logbook(done: Vec<Entry>, logbook: &mut TaskpaperFile) {
     logbook.entries.reverse();
 }
 
+fn reset_boxes(text: &str) -> String {
+    text.lines()
+        .map(|l| {
+            if l.trim_start().starts_with("[X]") {
+                Cow::Owned(l.replacen("[X]", "[_]", 1))
+            } else {
+                Cow::Borrowed(l)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn move_repeated_items_to_tickle(repeat: Vec<Entry>, tickle: &mut TaskpaperFile) -> Result<()> {
     for mut e in repeat {
+        // Get tags but also remove boxes [X] => [_]
         let tags = match e {
-            Entry::Task(ref mut t) => &mut t.tags,
-            Entry::Project(ref mut p) => &mut p.tags,
+            Entry::Task(ref mut t) => {
+                if let Some(n) = &t.note {
+                    t.note = Some(reset_boxes(&n));
+                }
+                &mut t.tags
+            }
+            Entry::Project(ref mut p) => {
+                if let Some(n) = &mut p.note {
+                    n.text = reset_boxes(&n.text);
+                }
+                &mut p.tags
+            }
             Entry::Note(_) => unreachable!(),
         };
         let done_tag = &tags.get("done").unwrap().value.unwrap();
@@ -82,7 +107,8 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
     let mut tickle = db.parse_common_file(taskpaper::CommonFileKind::Tickle)?;
     let mut logbook = db.parse_common_file(taskpaper::CommonFileKind::Logbook)?;
 
-    // TODO(sirver): This method could be much simpler expressed using the .filter() method.
+    // TODO(sirver): This method could be much simpler expressed using the .filter() method. Or
+    // maybe not, since we are collecting the 'parent_texts'.
     fn recurse(
         parent_texts: &[String],
         entries: Vec<Entry>,
@@ -94,6 +120,11 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
         for e in entries {
             match e {
                 Entry::Project(mut p) => {
+
+                    let mut children_parent_texts = parent_texts.to_vec();
+                    children_parent_texts.push(p.text.to_string());
+                    p.children = recurse(&children_parent_texts, p.children, done, repeat);
+
                     if p.tags.contains("done") {
                         let mut tag = p.tags.get("done").unwrap();
                         if tag.value.is_none() {
@@ -106,9 +137,6 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
                         p.text = format!("{} • {}", parent_texts.join(" • "), p.text);
                         done.push(Entry::Project(p));
                     } else {
-                        let mut parent_texts = parent_texts.to_vec();
-                        parent_texts.push(p.text.to_string());
-                        p.children = recurse(&parent_texts, p.children, done, repeat);
                         new_entries.push(Entry::Project(p));
                     }
                 }
@@ -183,6 +211,7 @@ pub fn parse_duration(s: &str) -> Result<chrono::Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use taskpaper::testing::*;
 
     #[test]
     fn test_parse_duration() {
@@ -192,6 +221,33 @@ mod tests {
         assert_eq!(
             parse_duration("4y").unwrap(),
             chrono::Duration::days(4 * 365)
+        );
+    }
+
+    #[test]
+    fn test_log_done() {
+        let mut test = DatabaseTest::new();
+        let config: ConfigurationFile =
+            toml::from_str(include_str!("../../tests/log_done/taskpaperrc")).unwrap();
+
+        test.write_file(
+            "02_todo.taskpaper",
+            include_str!("../../tests/log_done/todo_in.taskpaper"),
+        );
+        test.write_file("40_logbook.taskpaper", "");
+        test.write_file("03_tickle.taskpaper", "");
+
+        let db = test.read_database();
+
+        run(db, &CommandLineArguments {}, &config).unwrap();
+
+        test.assert_eq_to_golden(
+            "src/tests/log_done/tickle_out.taskpaper",
+            "03_tickle.taskpaper",
+        );
+        test.assert_eq_to_golden(
+            "src/tests/log_done/logbook_out.taskpaper",
+            "40_logbook.taskpaper",
         );
     }
 }

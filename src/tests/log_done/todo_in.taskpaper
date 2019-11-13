@@ -1,0 +1,17 @@
+A project:
+	A done project: @done(2017-11-13)
+		- An nested item that should be repeated and is done too @repeat(1m) @done(2017-11-13)
+			[X] A box
+	Repeat me:
+		- Something to be logged and repeated @foo @blub @done(2018-01-13) @repeat(1m)
+		- Something to be logged and repeated and unboxed @foo @blub @done(2018-01-13) @repeat(1m)
+			[X] A checked box
+			[_] A unchecked box
+	A done project with some done and some undone tasks: @done(2018-07-13)
+		- This one is done @done(2018-07-13)
+		- This one is not @foo
+		- This one is done again @done(2018-07-13)
+	- Nothing to do @a @b(value)
+	- Something to be logged @foo @blub @done(2019-10-13)
+	- Something to be logged and not unboxed @foo(value) @blub @done(2019-11-13)
+		[X] A box

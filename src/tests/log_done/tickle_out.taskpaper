@@ -1,0 +1,6 @@
+- An nested item that should be repeated and is done too @repeat(1m) @to_inbox(2017-12-13)
+	[_] A box
+- Something to be logged and repeated @blub @foo @repeat(1m) @to_inbox(2018-02-12)
+- Something to be logged and repeated and unboxed @blub @foo @repeat(1m) @to_inbox(2018-02-12)
+	[_] A checked box
+	[_] A unchecked box

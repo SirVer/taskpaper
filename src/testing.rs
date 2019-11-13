@@ -37,4 +37,23 @@ impl DatabaseTest {
         self.database = Some(db);
         self.database.as_mut().unwrap()
     }
+
+    pub fn assert_eq_to_golden(&self, golden: impl AsRef<Path>, path: impl AsRef<Path>) {
+        let golden_data = fs::read_to_string(golden.as_ref()).expect("Could not read golden.");
+        let out = fs::read_to_string(&self.dir.path().join(path.as_ref()))
+            .expect("Could not read golden.");
+        if golden_data == out {
+            return;
+        }
+
+        let tmp_path = PathBuf::from("/tmp").join(&path);
+        ::std::fs::write(&tmp_path, &out).expect("Could not write output.");
+
+        panic!(
+            "{} != {}.\n\nWrote output into {}",
+            golden.as_ref().display(),
+            path.as_ref().display(),
+            tmp_path.display()
+        );
+    }
 }
