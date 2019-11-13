@@ -33,7 +33,8 @@ impl DatabaseTest {
     }
 
     pub fn read_database(&mut self) -> &mut Database {
-        self.database = Some(Database::read(self.dir.path()).expect("Could not read database."));
+        let db = Database::from_dir(self.dir.path()).expect("Could not read database.");
+        self.database = Some(db);
         self.database.as_mut().unwrap()
     }
 }

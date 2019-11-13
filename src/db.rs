@@ -1,3 +1,4 @@
+use crate::FormatOptions;
 use crate::{Result, TaskpaperFile};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -9,14 +10,17 @@ use walkdir::WalkDir;
 #[derive(Debug)]
 pub struct Database {
     pub root: PathBuf,
-    pub files: HashMap<PathBuf, TaskpaperFile>,
 }
 
 impl Database {
-    pub fn read(dir: impl AsRef<Path>) -> Result<Self> {
-        let mut files = HashMap::new();
+    pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self> {
         let root = dir.as_ref().absolutize()?;
-        for entry in WalkDir::new(dir.as_ref()) {
+        Ok(Self { root })
+    }
+
+    pub fn parse_all_files(&self) -> Result<HashMap<PathBuf, TaskpaperFile>> {
+        let mut files = HashMap::new();
+        for entry in WalkDir::new(&self.root) {
             if entry.is_err() {
                 continue;
             }
@@ -30,14 +34,10 @@ impl Database {
                 println!("Skipping {:?} due to parsing errors.", path);
                 continue;
             }
-            let relative_path = entry
-                .path()
-                .strip_prefix(dir.as_ref())
-                .unwrap()
-                .to_path_buf();
+            let relative_path = entry.path().strip_prefix(&self.root).unwrap().to_path_buf();
             files.insert(relative_path, file.unwrap());
         }
-        Ok(Database { root, files })
+        Ok(files)
     }
 
     /// Returns the name (i.e. relative path) of 'path' inside of the database.
@@ -54,6 +54,66 @@ impl Database {
             Some(rel.to_path_buf())
         } else {
             None
+        }
+    }
+
+    pub fn parse_common_file(&self, kind: CommonFileKind) -> Result<TaskpaperFile> {
+        TaskpaperFile::parse_file(kind.find(&self.root).expect("Common file not found!"))
+    }
+
+    pub fn overwrite_common_file(
+        &self,
+        tpf: &TaskpaperFile,
+        kind: CommonFileKind,
+        options: FormatOptions,
+    ) -> Result<()> {
+        tpf.write(
+            kind.find(&self.root).expect("Common file not found!"),
+            options,
+        )
+    }
+
+    pub fn path_of_common_file(&self, kind: CommonFileKind) -> Option<PathBuf> {
+        kind.find(&self.root)
+    }
+}
+
+#[derive(Debug)]
+pub enum CommonFileKind {
+    Inbox,
+    Todo,
+    Tickle,
+    Checkout,
+    Logbook,
+    Timeline,
+}
+
+impl CommonFileKind {
+    fn find(&self, root: &Path) -> Option<PathBuf> {
+        let path = match *self {
+            CommonFileKind::Inbox => root.join("01_inbox.taskpaper"),
+            CommonFileKind::Todo => root.join("02_todo.taskpaper"),
+            CommonFileKind::Tickle => root.join("03_tickle.taskpaper"),
+            CommonFileKind::Checkout => root.join("09_to_checkout.taskpaper"),
+            CommonFileKind::Logbook => root.join("40_logbook.taskpaper"),
+            CommonFileKind::Timeline => root.join("10_timeline.taskpaper"),
+        };
+        if path.exists() {
+            Some(path)
+        } else {
+            None
+        }
+    }
+
+    #[cfg(test)]
+    fn to_path_buf(&self) -> PathBuf {
+        match *self {
+            CommonFileKind::Inbox => PathBuf::from("01_inbox.taskpaper"),
+            CommonFileKind::Todo => PathBuf::from("02_todo.taskpaper"),
+            CommonFileKind::Tickle => PathBuf::from("03_tickle.taskpaper"),
+            CommonFileKind::Checkout => PathBuf::from("09_to_checkout.taskpaper"),
+            CommonFileKind::Logbook => PathBuf::from("40_logbook.taskpaper"),
+            CommonFileKind::Timeline => PathBuf::from("10_timeline.taskpaper"),
         }
     }
 }

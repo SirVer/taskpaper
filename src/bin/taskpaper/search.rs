@@ -23,7 +23,11 @@ pub struct CommandLineArguments {
     location: bool,
 }
 
-pub fn search(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn search(
+    db: &Database,
+    args: &CommandLineArguments,
+    config: &ConfigurationFile,
+) -> Result<()> {
     let mut files = Vec::new();
 
     let mut query = args.query.clone();
@@ -36,12 +40,15 @@ pub fn search(args: &CommandLineArguments, config: &ConfigurationFile) -> Result
             }
         }
     }
+
+    let single_file;
+    let all_files;
     if let Some(path) = &args.input {
-        let taskpaper_file = TaskpaperFile::parse_file(&path).unwrap();
-        files.push((path.to_owned(), taskpaper_file));
+        single_file = Some(TaskpaperFile::parse_file(&path).unwrap());
+        files.push((path, single_file.as_ref().unwrap()));
     } else {
-        let db = Database::read(&config.database)?;
-        for (path, tpf) in db.files {
+        all_files = db.parse_all_files()?;
+        for (path, tpf) in &all_files {
             files.push((path, tpf));
         }
     }

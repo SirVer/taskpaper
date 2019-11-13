@@ -123,19 +123,21 @@ fn main() {
         config
     };
 
+    let db = taskpaper::Database::from_dir(&config.database).expect("Could not open the database.");
+
     match args.cmd {
-        Some(Command::Search(args)) => search::search(&args, &config).unwrap(),
-        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&args, &config).unwrap(),
+        Some(Command::Search(args)) => search::search(&db, &args, &config).unwrap(),
+        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args, &config).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
-        Some(Command::Housekeeping(args)) => housekeeping::run(&args, &config).unwrap(),
+        Some(Command::Housekeeping(args)) => housekeeping::run(&db, &args, &config).unwrap(),
         Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),
-        Some(Command::LogDone(args)) => log_done::run(&args, &config).unwrap(),
+        Some(Command::LogDone(args)) => log_done::run(&db, &args, &config).unwrap(),
         Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
         Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
-        Some(Command::CheckFeeds(args)) => check_feeds::run(&args, &config).unwrap(),
+        Some(Command::CheckFeeds(args)) => check_feeds::run(&db, &args, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
-        Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&args),
+        Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&db, &args),
         None => {
             // TODO(sirver): I found no easy way to make clap output the usage here.
             println!("Need a subcommand.");

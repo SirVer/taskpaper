@@ -7,7 +7,7 @@ use std::io::{self, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use taskpaper::tag;
-use taskpaper::{Error, Result};
+use taskpaper::{Database, Error, Result};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -147,7 +147,11 @@ pub fn line_to_task(
     }))
 }
 
-pub fn to_inbox(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn to_inbox(
+    db: &Database,
+    args: &CommandLineArguments,
+    config: &ConfigurationFile,
+) -> Result<()> {
     let mut tpf = match &args.file {
         Some(f) => {
             if f.exists() {
@@ -156,7 +160,7 @@ pub fn to_inbox(args: &CommandLineArguments, config: &ConfigurationFile) -> Resu
                 taskpaper::TaskpaperFile::new()
             }
         }
-        None => taskpaper::TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox)?,
+        None => db.parse_common_file(taskpaper::CommonFileKind::Inbox)?,
     };
 
     if let Some(p) = &args.project {
@@ -208,7 +212,7 @@ pub fn to_inbox(args: &CommandLineArguments, config: &ConfigurationFile) -> Resu
 
     match &args.file {
         Some(f) => tpf.write(f, style)?,
-        None => tpf.overwrite_common_file(taskpaper::CommonFileKind::Inbox, style)?,
+        None => db.overwrite_common_file(&tpf, taskpaper::CommonFileKind::Inbox, style)?,
     };
     Ok(())
 }

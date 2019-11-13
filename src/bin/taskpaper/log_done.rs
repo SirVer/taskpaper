@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use taskpaper::Error;
-use taskpaper::{Entry, Result, Tag, TaskpaperFile};
+use taskpaper::{Database, Entry, Result, Tag, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
@@ -77,10 +77,10 @@ fn move_repeated_items_to_tickle(repeat: Vec<Entry>, tickle: &mut TaskpaperFile)
     Ok(())
 }
 
-pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
-    let mut todo = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Todo)?;
-    let mut tickle = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Tickle)?;
-    let mut logbook = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Logbook)?;
+pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+    let mut todo = db.parse_common_file(taskpaper::CommonFileKind::Todo)?;
+    let mut tickle = db.parse_common_file(taskpaper::CommonFileKind::Tickle)?;
+    let mut logbook = db.parse_common_file(taskpaper::CommonFileKind::Logbook)?;
 
     // TODO(sirver): This method could be much simpler expressed using the .filter() method.
     fn recurse(
@@ -141,12 +141,21 @@ pub fn run(_: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     move_repeated_items_to_tickle(repeat, &mut tickle)?;
     log_to_logbook(done, &mut logbook);
 
-    todo.overwrite_common_file(taskpaper::CommonFileKind::Todo, config.formats["todo"])?;
-    logbook.overwrite_common_file(
+    db.overwrite_common_file(
+        &todo,
+        taskpaper::CommonFileKind::Todo,
+        config.formats["todo"],
+    )?;
+    db.overwrite_common_file(
+        &logbook,
         taskpaper::CommonFileKind::Logbook,
         config.formats["logbook"],
     )?;
-    tickle.overwrite_common_file(taskpaper::CommonFileKind::Tickle, config.formats["inbox"])?;
+    db.overwrite_common_file(
+        &tickle,
+        taskpaper::CommonFileKind::Tickle,
+        config.formats["inbox"],
+    )?;
     Ok(())
 }
 

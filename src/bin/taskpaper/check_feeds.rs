@@ -7,7 +7,7 @@ use std::fs;
 use std::io;
 use structopt::StructOpt;
 use syndication::Feed;
-use taskpaper::{Error, Result, TaskpaperFile};
+use taskpaper::{Database, Error, Result};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
 
@@ -33,7 +33,7 @@ pub struct CommandLineArguments {
     style: String,
 }
 
-pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
     let result: Result<Vec<TaskEntry>> = rt.block_on(async {
         let client = reqwest::Client::builder()
@@ -66,7 +66,7 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
     let mut tags = taskpaper::Tags::new();
     tags.insert(taskpaper::Tag::new("reading".to_string(), None));
 
-    let mut inbox = TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox)?;
+    let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
     for entry in result? {
         inbox.push_back(taskpaper::Entry::Task(taskpaper::Task {
             line_index: None,
@@ -75,7 +75,7 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
             note: Some(entry.note_text.join("\n")),
         }))
     }
-    inbox.overwrite_common_file(taskpaper::CommonFileKind::Inbox, style)?;
+    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox, style)?;
 
     Ok(())
 }

@@ -1,7 +1,7 @@
-use taskpaper::{Result, TaskpaperFile};
+use taskpaper::{Database, Result, TaskpaperFile};
 
-pub fn extract_checkout(todo: &mut TaskpaperFile) -> Result<()> {
-    if let Some(path) = taskpaper::CommonFileKind::Checkout.find() {
+pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
+    if let Some(path) = db.path_of_common_file(taskpaper::CommonFileKind::Checkout) {
         taskpaper::mirror_changes(&path, todo)?;
     }
     let mut checkout = TaskpaperFile::new();
@@ -38,7 +38,8 @@ pub fn extract_checkout(todo: &mut TaskpaperFile) -> Result<()> {
             }));
     }
 
-    checkout.overwrite_common_file(
+    db.overwrite_common_file(
+        &checkout,
         taskpaper::CommonFileKind::Checkout,
         taskpaper::FormatOptions::default(),
     )?;

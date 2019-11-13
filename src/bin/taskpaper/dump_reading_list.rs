@@ -2,7 +2,7 @@ use chrono::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 use structopt::StructOpt;
-use taskpaper::Tags;
+use taskpaper::{Database, Tags};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -35,7 +35,7 @@ struct Entry {
     uri_dictionary: Option<HashMap<String, String>>,
 }
 
-pub fn dump_reading_list(args: &CommandLineArguments) {
+pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
     let home = dirs::home_dir().expect("HOME not set.");
     let plist: Entry = plist::from_file(&home.join("Library/Safari/Bookmarks.plist")).unwrap();
     let c = plist
@@ -47,7 +47,10 @@ pub fn dump_reading_list(args: &CommandLineArguments) {
         .unwrap();
 
     let mut tpf = if args.inbox {
-        Some(taskpaper::TaskpaperFile::parse_common_file(taskpaper::CommonFileKind::Inbox).unwrap())
+        Some(
+            db.parse_common_file(taskpaper::CommonFileKind::Inbox)
+                .unwrap(),
+        )
     } else {
         None
     };
@@ -88,7 +91,8 @@ pub fn dump_reading_list(args: &CommandLineArguments) {
     }
 
     tpf.map(|tpf| {
-        tpf.overwrite_common_file(
+        db.overwrite_common_file(
+            &tpf,
             taskpaper::CommonFileKind::Inbox,
             taskpaper::FormatOptions {
                 sort: taskpaper::Sort::Nothing,

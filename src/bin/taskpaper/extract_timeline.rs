@@ -1,9 +1,13 @@
 use crate::ConfigurationFile;
 use std::collections::BTreeMap;
-use taskpaper::{Error, Result, TaskpaperFile};
+use taskpaper::{Database, Error, Result, TaskpaperFile};
 
-pub fn extract_timeline(todo: &mut TaskpaperFile, config: &ConfigurationFile) -> Result<()> {
-    if let Some(path) = taskpaper::CommonFileKind::Timeline.find() {
+pub fn extract_timeline(
+    db: &Database,
+    todo: &mut TaskpaperFile,
+    config: &ConfigurationFile,
+) -> Result<()> {
+    if let Some(path) = db.path_of_common_file(taskpaper::CommonFileKind::Timeline) {
         taskpaper::mirror_changes(&path, todo)?;
     }
     let today = chrono::Local::now().naive_local().date();
@@ -56,7 +60,8 @@ pub fn extract_timeline(todo: &mut TaskpaperFile, config: &ConfigurationFile) ->
                 children: due_entries,
             }));
     }
-    timeline.overwrite_common_file(
+    db.overwrite_common_file(
+        &timeline,
         taskpaper::CommonFileKind::Timeline,
         config.formats["timeline"],
     )?;

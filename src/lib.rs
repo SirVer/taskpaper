@@ -5,6 +5,7 @@ pub mod tag;
 pub mod testing;
 
 pub use crate::tag::{Tag, Tags};
+pub use db::{CommonFileKind, Database};
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Write};
 use std::io;
@@ -503,65 +504,12 @@ pub struct TaskpaperFile {
     path: Option<PathBuf>,
 }
 
-#[derive(Debug)]
-pub enum CommonFileKind {
-    Inbox,
-    Todo,
-    Tickle,
-    Checkout,
-    Logbook,
-    Timeline,
-}
-
-impl CommonFileKind {
-    pub fn find(&self) -> Option<PathBuf> {
-        let home = dirs::home_dir().expect("HOME not set.");
-        let path = match *self {
-            CommonFileKind::Inbox => home.join("Dropbox/Tasks/01_inbox.taskpaper"),
-            CommonFileKind::Todo => home.join("Dropbox/Tasks/02_todo.taskpaper"),
-            CommonFileKind::Tickle => home.join("Dropbox/Tasks/03_tickle.taskpaper"),
-            CommonFileKind::Checkout => home.join("Dropbox/Tasks/09_to_checkout.taskpaper"),
-            CommonFileKind::Logbook => home.join("Dropbox/Tasks/40_logbook.taskpaper"),
-            CommonFileKind::Timeline => home.join("Dropbox/Tasks/10_timeline.taskpaper"),
-        };
-        if path.exists() {
-            Some(path)
-        } else {
-            None
-        }
-    }
-
-    #[cfg(test)]
-    fn to_path_buf(&self) -> PathBuf {
-        match *self {
-            CommonFileKind::Inbox => PathBuf::from("01_inbox.taskpaper"),
-            CommonFileKind::Todo => PathBuf::from("02_todo.taskpaper"),
-            CommonFileKind::Tickle => PathBuf::from("03_tickle.taskpaper"),
-            CommonFileKind::Checkout => PathBuf::from("09_to_checkout.taskpaper"),
-            CommonFileKind::Logbook => PathBuf::from("40_logbook.taskpaper"),
-            CommonFileKind::Timeline => PathBuf::from("10_timeline.taskpaper"),
-        }
-    }
-}
-
 impl TaskpaperFile {
     pub fn new() -> Self {
         TaskpaperFile {
             entries: Vec::new(),
             path: None,
         }
-    }
-
-    pub fn parse_common_file(kind: CommonFileKind) -> Result<Self> {
-        Self::parse_file(kind.find().expect("Common file not found!"))
-    }
-
-    pub fn overwrite_common_file(
-        &self,
-        kind: CommonFileKind,
-        options: FormatOptions,
-    ) -> Result<()> {
-        self.write(kind.find().expect("Common file not found!"), options)
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
