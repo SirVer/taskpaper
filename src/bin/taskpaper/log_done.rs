@@ -120,7 +120,6 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
         for e in entries {
             match e {
                 Entry::Project(mut p) => {
-
                     let mut children_parent_texts = parent_texts.to_vec();
                     children_parent_texts.push(p.text.to_string());
                     p.children = recurse(&children_parent_texts, p.children, done, repeat);
