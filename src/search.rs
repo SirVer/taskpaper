@@ -9,6 +9,7 @@
 //! primary    => STRING | "false" | "true" | "(" expression ")";
 
 use crate::{Error, Result, Tags};
+use smol_str::SmolStr;
 
 // NOCOM(#sirver): remove panics here
 
@@ -16,7 +17,7 @@ use crate::{Error, Result, Tags};
 #[derive(Debug, PartialEq, Clone)]
 enum TokenKind {
     /// A Tag, optionally with a value
-    Tag(String),
+    Tag(SmolStr),
     LeftParen,
     RightParen,
 
@@ -30,7 +31,7 @@ enum TokenKind {
     LessEqual,
 
     /// Literals
-    String(String),
+    String(SmolStr),
 
     // Keywords
     // TODO(sirver): Do we require false and true besides for testing?
@@ -62,7 +63,7 @@ impl Token {
 
 #[derive(Debug)]
 pub enum Expr {
-    Tag(String),
+    Tag(SmolStr),
     Grouping(Box<Expr>),
 
     NotEqual(Box<Expr>, Box<Expr>),
@@ -72,7 +73,7 @@ pub enum Expr {
     Less(Box<Expr>, Box<Expr>),
     LessEqual(Box<Expr>, Box<Expr>),
 
-    String(String),
+    String(SmolStr),
 
     Not(Box<Expr>),
     And(Box<Expr>, Box<Expr>),
@@ -85,7 +86,7 @@ pub enum Expr {
 pub enum Value {
     Undefined, // Missing tag
     Bool(bool),
-    String(String),
+    String(SmolStr),
 }
 
 // NOCOM(#sirver): should not panic, but return a meaningful error
@@ -187,7 +188,7 @@ impl Expr {
                 },
                 None => Value::Undefined,
             },
-            Expr::String(name) => Value::String(name.to_string()),
+            Expr::String(name) => Value::String(name.clone()),
             Expr::Grouping(inner) => inner.evaluate(tags),
             Expr::NotEqual(l, r) => l.evaluate(tags).equal(&r.evaluate(tags)).not(),
             Expr::Equal(l, r) => l.evaluate(tags).equal(&r.evaluate(tags)),
@@ -420,7 +421,7 @@ fn lex_string(text: &str, start: usize, stream: &mut CharStream) -> Result<Token
     stream.advance(); // Consumes '"'
     let len = stream.position() - start;
     Ok(Token::new(
-        TokenKind::String(text[start + 1..start + len - 1].to_string()),
+        TokenKind::String(SmolStr::new(text[start + 1..start + len - 1].to_string())),
         start,
         len,
     ))
@@ -435,7 +436,7 @@ fn lex_tag(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
     }
 
     let len = stream.position() - start;
-    let identifier = text[start + 1..start + len].to_string();
+    let identifier = SmolStr::new(&text[start + 1..start + len]);
     Ok(Token::new(TokenKind::Tag(identifier), start, len))
 }
 
@@ -619,9 +620,9 @@ mod tests {
         assert_eq!(
             lex("@blub <= @bla").unwrap(),
             vec![
-                Token::new(Tag("blub".to_string()), 0, 5),
+                Token::new(Tag(SmolStr::new("blub")), 0, 5),
                 Token::new(LessEqual, 6, 2),
-                Token::new(Tag("bla".to_string()), 9, 4),
+                Token::new(Tag(SmolStr::new("bla")), 9, 4),
                 Token::new(Eof, 13, 0)
             ]
         );
@@ -690,19 +691,19 @@ mod tests {
 
         {
             let mut tags = Tags::new();
-            tags.insert(Tag::new("foo".to_string(), None));
+            tags.insert(Tag::new(SmolStr::new("foo"), None));
             assert_eq!(Value::Bool(true), expr.evaluate(&tags));
         }
 
         {
             let mut tags = Tags::new();
-            tags.insert(Tag::new("bar".to_string(), Some("something".to_string())));
+            tags.insert(Tag::new(SmolStr::new("bar"), Some(SmolStr::new("something"))));
             assert_eq!(Value::Bool(false), expr.evaluate(&tags));
         }
 
         {
             let mut tags = Tags::new();
-            tags.insert(Tag::new("bar".to_string(), Some("any".to_string())));
+            tags.insert(Tag::new(SmolStr::new("bar"), Some(SmolStr::new("any"))));
             assert_eq!(Value::Bool(true), expr.evaluate(&tags));
         }
     }

@@ -1,6 +1,7 @@
 use crate::ConfigurationFile;
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::BTreeSet;
 use std::fs;
@@ -64,7 +65,10 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     };
 
     let mut tags = taskpaper::Tags::new();
-    tags.insert(taskpaper::Tag::new("reading".to_string(), None));
+    tags.insert(taskpaper::Tag::new(
+        SmolStr::new_inline_from_ascii(7, b"reading"),
+        None,
+    ));
 
     let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
     for entry in result? {

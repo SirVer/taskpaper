@@ -1,5 +1,5 @@
 use crate::FormatOptions;
-use crate::{TaskpaperHashMap, Result, TaskpaperFile};
+use crate::{Result, TaskpaperFile, TaskpaperHashMap};
 use path_absolutize::Absolutize;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};

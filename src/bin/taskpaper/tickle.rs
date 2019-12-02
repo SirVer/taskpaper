@@ -1,4 +1,5 @@
 use taskpaper::{Entry, Error, Result, TaskpaperFile};
+use smol_str::SmolStr;
 
 pub fn tickle(
     inbox: &mut TaskpaperFile,
@@ -23,7 +24,7 @@ pub fn tickle(
             if tag.value.is_none() {
                 return Err(Error::misc(format!("Found @tickle without value: {:?}", e)));
             }
-            tag.name = "to_inbox".to_string();
+            tag.name = SmolStr::new_inline_from_ascii(8, b"to_inbox");
             tags.remove("tickle");
             tags.insert(tag);
         }

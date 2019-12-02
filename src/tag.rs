@@ -1,15 +1,16 @@
 use crate::search::CharStream;
 use crate::{TaskpaperHashMap, TaskpaperHashMapIter};
+use smol_str::SmolStr;
 use std::fmt;
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Tag {
-    pub name: String,
-    pub value: Option<String>,
+    pub name: SmolStr,
+    pub value: Option<SmolStr>,
 }
 
 impl Tag {
-    pub fn new(name: String, value: Option<String>) -> Self {
+    pub fn new(name: SmolStr, value: Option<SmolStr>) -> Self {
         Tag { name, value }
     }
 }
@@ -26,7 +27,7 @@ impl fmt::Display for Tag {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tags {
-    tags: TaskpaperHashMap<String, Option<String>>,
+    tags: TaskpaperHashMap<SmolStr, Option<SmolStr>>,
 }
 
 impl Tags {
@@ -50,7 +51,7 @@ impl Tags {
 
     pub fn get(&self, name: &str) -> Option<Tag> {
         self.tags.get(name).map(|v| Tag {
-            name: name.to_string(),
+            name: SmolStr::new(name),
             value: v.clone(),
         })
     }
@@ -67,7 +68,7 @@ impl Tags {
 }
 
 pub struct TagsIterator<'a> {
-    iter: TaskpaperHashMapIter<'a, String, Option<String>>,
+    iter: TaskpaperHashMapIter<'a, SmolStr, Option<SmolStr>>,
 }
 
 impl<'a> Iterator for TagsIterator<'a> {
@@ -75,7 +76,7 @@ impl<'a> Iterator for TagsIterator<'a> {
 
     fn next(&mut self) -> Option<Tag> {
         self.iter.next().map(|(k, v)| Tag {
-            name: k.to_string(),
+            name: k.clone(),
             value: v.clone(),
         })
     }
@@ -182,7 +183,13 @@ impl Parser {
                     if name.is_empty() {
                         return None;
                     } else {
-                        return Some((Tag { name, value: None }, (tag_starts, tag_ends)));
+                        return Some((
+                            Tag {
+                                name: SmolStr::new(name),
+                                value: None,
+                            },
+                            (tag_starts, tag_ends),
+                        ));
                     }
                 }
                 TokenKind::LeftParen => {
@@ -228,8 +235,12 @@ impl Parser {
         }
         Some((
             Tag {
-                name,
-                value: if value.is_empty() { None } else { Some(value) },
+                name: SmolStr::new(name),
+                value: if value.is_empty() {
+                    None
+                } else {
+                    Some(SmolStr::new(value))
+                },
             },
             (tag_starts, tag_ends),
         ))
@@ -302,7 +313,7 @@ mod tests {
         check(
             "@done",
             Tag {
-                name: "done".to_string(),
+                name: SmolStr::new("done"),
                 value: None,
             },
             5,
@@ -310,47 +321,47 @@ mod tests {
         check(
             "@due(today)",
             Tag {
-                name: "due".to_string(),
-                value: Some("today".to_string()),
+                name: SmolStr::new("due"),
+                value: Some(SmolStr::new("today")),
             },
             11,
         );
         check(
             "@uuid(123-abc-ef)",
             Tag {
-                name: "uuid".to_string(),
-                value: Some("123-abc-ef".to_string()),
+                name: SmolStr::new("uuid"),
+                value: Some(SmolStr::new("123-abc-ef")),
             },
             17,
         );
         check(
             "@another(foo bar)   ",
             Tag {
-                name: "another".to_string(),
-                value: Some("foo bar".to_string()),
+                name: SmolStr::new("another"),
+                value: Some(SmolStr::new("foo bar")),
             },
             17,
         );
         check(
             " @another(foo bar)   ",
             Tag {
-                name: "another".to_string(),
-                value: Some("foo bar".to_string()),
+                name: SmolStr::new("another"),
+                value: Some(SmolStr::new("foo bar")),
             },
             18,
         );
         check(
             "     @another(foo     bar)",
             Tag {
-                name: "another".to_string(),
-                value: Some("foo     bar".to_string()),
+                name: SmolStr::new("another"),
+                value: Some(SmolStr::new("foo     bar")),
             },
             26,
         );
         check(
             "@foo @bar",
             Tag {
-                name: "foo".to_string(),
+                name: SmolStr::new("foo"),
                 value: None,
             },
             4,

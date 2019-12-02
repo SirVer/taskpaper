@@ -1,6 +1,7 @@
 use crate::ConfigurationFile;
 use chrono::NaiveDate;
 use lazy_static::lazy_static;
+use smol_str::SmolStr;
 use std::borrow::Cow;
 use structopt::StructOpt;
 use taskpaper::Error;
@@ -87,9 +88,9 @@ fn move_repeated_items_to_tickle(repeat: Vec<Entry>, tickle: &mut TaskpaperFile)
             .value
             .ok_or_else(|| Error::misc("Invalid @repeat without value."))
             .and_then(|v| parse_duration(&v))?;
-        let to_inbox = (done_date + duration).format("%Y-%m-%d").to_string();
+        let to_inbox = SmolStr::new((done_date + duration).format("%Y-%m-%d").to_string());
         tags.insert(Tag {
-            name: "to_inbox".to_string(),
+            name: SmolStr::new_inline_from_ascii(8, b"to_inbox"),
             value: Some(to_inbox),
         });
         tickle.entries.push(e);
@@ -115,7 +116,7 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
         done: &mut Vec<Entry>,
         repeat: &mut Vec<Entry>,
     ) -> Vec<Entry> {
-        let today = chrono::Local::now().date().format("%Y-%m-%d").to_string();
+        let today = SmolStr::new(chrono::Local::now().date().format("%Y-%m-%d").to_string());
         let mut new_entries = Vec::new();
         for e in entries {
             match e {

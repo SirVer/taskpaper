@@ -1,5 +1,6 @@
 use chrono::prelude::*;
 use serde::Deserialize;
+use smol_str::SmolStr;
 use std::collections::HashMap;
 use structopt::StructOpt;
 use taskpaper::{Database, Tags};
@@ -74,7 +75,7 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
         if args.inbox {
             let mut tags = Tags::new();
             tags.insert(taskpaper::Tag {
-                name: "reading".to_string(),
+                name: SmolStr::new_inline_from_ascii(7, b"reading"),
                 value: None,
             });
             tpf.as_mut()
