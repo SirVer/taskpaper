@@ -28,6 +28,7 @@ tokio = "0.2.0-alpha.6"
 toml = "0.5.5"
 walkdir = "2.2.5"
 html2text = "0.1.8"
+fnv = "1.0.6"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"

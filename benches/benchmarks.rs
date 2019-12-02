@@ -1,5 +1,4 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use std::collections::HashMap;
 use taskpaper::{db::Database, TaskpaperFile};
 
 fn parse() {

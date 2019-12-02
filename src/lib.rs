@@ -14,6 +14,9 @@ use std::io;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 
+pub type TaskpaperHashMap<K, V> = ::std::collections::HashMap<K, V, fnv::FnvBuildHasher>;
+pub type TaskpaperHashMapIter<'a, K, V> = ::std::collections::hash_map::Iter<'a, K, V>;
+
 #[derive(Debug)]
 pub enum Error {
     Misc(String),

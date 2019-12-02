@@ -1,5 +1,5 @@
 use crate::search::CharStream;
-use std::collections::{hash_map::Iter as HashMapIter, HashMap};
+use crate::{TaskpaperHashMap, TaskpaperHashMapIter};
 use std::fmt;
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -26,13 +26,13 @@ impl fmt::Display for Tag {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Tags {
-    tags: HashMap<String, Option<String>>,
+    tags: TaskpaperHashMap<String, Option<String>>,
 }
 
 impl Tags {
     pub fn new() -> Self {
         Tags {
-            tags: HashMap::new(),
+            tags: TaskpaperHashMap::default(),
         }
     }
 
@@ -67,7 +67,7 @@ impl Tags {
 }
 
 pub struct TagsIterator<'a> {
-    iter: HashMapIter<'a, String, Option<String>>,
+    iter: TaskpaperHashMapIter<'a, String, Option<String>>,
 }
 
 impl<'a> Iterator for TagsIterator<'a> {

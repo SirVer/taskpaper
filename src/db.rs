@@ -1,7 +1,6 @@
 use crate::FormatOptions;
-use crate::{Result, TaskpaperFile};
+use crate::{TaskpaperHashMap, Result, TaskpaperFile};
 use path_absolutize::Absolutize;
-use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -18,8 +17,8 @@ impl Database {
         Ok(Self { root })
     }
 
-    pub fn parse_all_files(&self) -> Result<HashMap<PathBuf, TaskpaperFile>> {
-        let mut files = HashMap::new();
+    pub fn parse_all_files(&self) -> Result<TaskpaperHashMap<PathBuf, TaskpaperFile>> {
+        let mut files = TaskpaperHashMap::default();
         for entry in WalkDir::new(&self.root) {
             if entry.is_err() {
                 continue;
