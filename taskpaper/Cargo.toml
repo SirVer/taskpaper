@@ -1,0 +1,16 @@
+[package]
+authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
+edition = "2018"
+name = "taskpaper"
+version = "0.16.1"
+
+[dependencies]
+path-absolutize = "1.1.1"
+reqwest = { version = "0.10.0-alpha.1", features = ["blocking"] }
+serde = { version = "1.0.102", features = [ "derive" ] }
+sha1 = { version = "0.6.0", features = ["std"] }
+tempdir = "0.3.7"
+walkdir = "2.2.5"
+
+[dev-dependencies]
+pretty_assertions = "0.6.1"

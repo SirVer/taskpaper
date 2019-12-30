@@ -3,6 +3,8 @@ function is_rust(p)
    return p:ext() == "rs" or p:ext() == "toml"
 end
 
+PACKAGE="--all"
+
 return {
    {
       should_run = is_rust,
@@ -10,19 +12,19 @@ return {
       commands = {
          {
             name = "Running cargo check",
-            command = "cargo check --color=always",
+            command = "cargo check " .. PACKAGE .. " --color=always",
          },
          {
-            name = "Running cargo test",
-            command = "cargo test --color=always",
+            name = "Running cargo test [debug]",
+            command = "cargo test " .. PACKAGE .. " --color=always",
          },
          {
-            name = "Running cargo build",
-            command = "cargo build --color=always",
+            name = "Running cargo build [debug]",
+            command = "cargo build " .. PACKAGE .. " --color=always",
          },
          {
             name = "Running cargo clippy",
-            command = "cargo clippy --color=always -- -W clippy::pedantic",
+            command = "cargo clippy " .. PACKAGE .. " --color=always",
          },
       }
    },

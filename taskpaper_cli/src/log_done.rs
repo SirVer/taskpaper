@@ -228,11 +228,11 @@ mod tests {
     fn test_log_done() {
         let mut test = DatabaseTest::new();
         let config: ConfigurationFile =
-            toml::from_str(include_str!("../../tests/log_done/taskpaperrc")).unwrap();
+            toml::from_str(include_str!("tests/log_done/taskpaperrc")).unwrap();
 
         test.write_file(
             "02_todo.taskpaper",
-            include_str!("../../tests/log_done/todo_in.taskpaper"),
+            include_str!("tests/log_done/todo_in.taskpaper"),
         );
         test.write_file("40_logbook.taskpaper", "");
         test.write_file("03_tickle.taskpaper", "");

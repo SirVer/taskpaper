@@ -17,7 +17,7 @@ main() {
 
     test -f Cargo.lock || cargo generate-lockfile
 
-    cross rustc --bin taskpaper --target $TARGET --release -- -C lto
+    cross rustc -p taskpaper_cli --bin taskpaper --target $TARGET --release -- -C lto
     cp target/$TARGET/release/taskpaper $stage/
 
     cd $stage
