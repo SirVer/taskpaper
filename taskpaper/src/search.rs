@@ -10,8 +10,6 @@
 
 use crate::{Error, Result, Tags};
 
-// NOCOM(#sirver): remove panics here
-
 // TODO(sirver): No support for ordering or project limiting as of now.
 #[derive(Debug, PartialEq, Clone)]
 enum TokenKind {
@@ -88,7 +86,6 @@ pub enum Value {
     String(String),
 }
 
-// NOCOM(#sirver): should not panic, but return a meaningful error
 impl Value {
     fn not(&self) -> Value {
         match self {
@@ -175,7 +172,13 @@ impl Expr {
     pub fn parse(text: &str) -> Result<Expr> {
         let tokens = lex(text)?;
         let mut parser = Parser::new(tokens);
-        Ok(*parser.expression())
+        let expr = *parser.expression()?;
+        if !parser.is_at_end() {
+            return Err(Error::QuerySyntaxError(format!(
+                "Unexpected tokens at end of input"
+            )));
+        }
+        Ok(expr)
     }
 
     pub fn evaluate(&self, tags: &Tags) -> Value {
@@ -214,30 +217,30 @@ impl Parser {
         Parser { tokens, current: 0 }
     }
 
-    fn expression(&mut self) -> Box<Expr> {
+    fn expression(&mut self) -> Result<Box<Expr>> {
         self.or()
     }
 
-    fn or(&mut self) -> Box<Expr> {
-        let mut expr = self.and();
+    fn or(&mut self) -> Result<Box<Expr>> {
+        let mut expr = self.and()?;
         while self.match_oneof(&[TokenKind::Or]) {
-            let right = self.and();
+            let right = self.and()?;
             expr = Box::new(Expr::Or(expr, right));
         }
-        expr
+        Ok(expr)
     }
 
-    fn and(&mut self) -> Box<Expr> {
-        let mut expr = self.comparison();
+    fn and(&mut self) -> Result<Box<Expr>> {
+        let mut expr = self.comparison()?;
         while self.match_oneof(&[TokenKind::And]) {
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = Box::new(Expr::And(expr, right));
         }
-        expr
+        Ok(expr)
     }
 
-    fn comparison(&mut self) -> Box<Expr> {
-        let mut expr = self.unary();
+    fn comparison(&mut self) -> Result<Box<Expr>> {
+        let mut expr = self.unary()?;
         while self.match_oneof(&[
             TokenKind::BangEqual,
             TokenKind::Equal,
@@ -250,7 +253,7 @@ impl Parser {
             // TODO(sirver): This is fairly ugly and requires me to keep a copy. It would be better
             // to pass ownership in advance() and previous()
             let prev = self.previous().kind.clone();
-            let right = self.unary();
+            let right = self.unary()?;
             expr = match prev {
                 TokenKind::BangEqual => Box::new(Expr::NotEqual(expr, right)),
                 TokenKind::Equal | TokenKind::EqualEqual => Box::new(Expr::Equal(expr, right)),
@@ -261,34 +264,42 @@ impl Parser {
                 c => unreachable!("{:?}", c),
             }
         }
-        expr
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> Box<Expr> {
+    fn unary(&mut self) -> Result<Box<Expr>> {
         if self.match_oneof(&[TokenKind::Not]) {
-            let right = self.unary();
-            return Box::new(Expr::Not(right));
+            let right = self.unary()?;
+            return Ok(Box::new(Expr::Not(right)));
         }
         self.primary()
     }
 
-    fn primary(&mut self) -> Box<Expr> {
+    fn primary(&mut self) -> Result<Box<Expr>> {
         let token = self.advance();
-        match &token.kind {
+        let expr = match &token.kind {
             TokenKind::False => Box::new(Expr::False),
             TokenKind::True => Box::new(Expr::True),
             TokenKind::Tag(name) => Box::new(Expr::Tag(name.clone())),
             TokenKind::String(string) => Box::new(Expr::String(string.clone())),
             TokenKind::LeftParen => {
-                let expr = self.expression();
+                let expr = self.expression()?;
                 if !self.check(&TokenKind::RightParen) {
-                    panic!("Expect ')' after expression.");
+                    return Err(Error::QuerySyntaxError(
+                        "Expect ')' after expression.".to_string(),
+                    ));
                 };
                 self.advance();
                 Box::new(Expr::Grouping(expr))
             }
-            _ => panic!("Invalid token: {:?}", token.kind),
-        }
+            _ => {
+                return Err(Error::QuerySyntaxError(format!(
+                    "Invalid token: {:?}",
+                    token.kind
+                )))
+            }
+        };
+        Ok(expr)
     }
 
     fn match_oneof(&mut self, tokens: &[TokenKind]) -> bool {
@@ -396,7 +407,7 @@ fn lex_keyword(text: &str, start: usize, stream: &mut CharStream) -> Result<Toke
         "or" => TokenKind::Or,
         "true" => TokenKind::True,
         _ => {
-            return Err(Error::misc(format!(
+            return Err(Error::QuerySyntaxError(format!(
                 "Unexpected identifier: '{}'.",
                 identifier
             )))
@@ -414,7 +425,7 @@ fn lex_string(text: &str, start: usize, stream: &mut CharStream) -> Result<Token
     }
 
     if stream.is_at_end() {
-        return Err(Error::misc("Unterminated string."));
+        return Err(Error::QuerySyntaxError("Unterminated string.".to_string()));
     }
 
     stream.advance(); // Consumes '"'
@@ -458,7 +469,7 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 if stream.is_next('=') {
                     tokens.push(Token::new(BangEqual, position, 2));
                 } else {
-                    return Err(Error::misc(format!(
+                    return Err(Error::QuerySyntaxError(format!(
                         "Unexpected token: '!'. String continues with: '{}'",
                         &input[position..]
                     )));
@@ -486,7 +497,7 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 }
             }
             c => {
-                return Err(Error::misc(format!(
+                return Err(Error::QuerySyntaxError(format!(
                     "Unexpected token: '{}'. String continues with: '{}'",
                     c,
                     &input[position..]
@@ -634,24 +645,28 @@ mod tests {
             Value::Bool(false),
             Parser::new(vec![tok(False), tok(Or), tok(False), tok(Eof)])
                 .or()
+                .unwrap()
                 .evaluate(&tags)
         );
         assert_eq!(
             Value::Bool(true),
             Parser::new(vec![tok(True), tok(Or), tok(False), tok(Eof)])
                 .or()
+                .unwrap()
                 .evaluate(&tags)
         );
         assert_eq!(
             Value::Bool(true),
             Parser::new(vec![tok(False), tok(Or), tok(True), tok(Eof)])
                 .or()
+                .unwrap()
                 .evaluate(&tags)
         );
         assert_eq!(
             Value::Bool(true),
             Parser::new(vec![tok(True), tok(Or), tok(True), tok(Eof)])
                 .or()
+                .unwrap()
                 .evaluate(&tags)
         );
     }
@@ -661,6 +676,18 @@ mod tests {
         let expr = Expr::parse("false or ((false and true) or true)").unwrap();
         let tags = Tags::new();
         assert_eq!(Value::Bool(true), expr.evaluate(&tags));
+    }
+
+    #[test]
+    fn test_syntax_error() {
+        let expr = Expr::parse("false or (false and true or true");
+        assert!(expr.is_err());
+    }
+
+    #[test]
+    fn test_extra_tokens() {
+        let expr = Expr::parse("false or (false and true or true))");
+        assert!(expr.is_err());
     }
 
     #[test]

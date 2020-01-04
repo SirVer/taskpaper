@@ -14,12 +14,14 @@ use std::io;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 
+// TODO(sirver): Convert to use thiserror
 #[derive(Debug)]
 pub enum Error {
     Misc(String),
     Other(Box<dyn ::std::error::Error>),
     Reqwest(reqwest::Error),
     Io(io::Error),
+    QuerySyntaxError(String),
 }
 
 impl From<io::Error> for Error {
