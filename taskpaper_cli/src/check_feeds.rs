@@ -38,7 +38,8 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     let result: Result<Vec<TaskEntry>> = rt.block_on(async {
         let client = reqwest::Client::builder()
             .redirect(reqwest::RedirectPolicy::limited(10))
-            .build()?;
+            .build()
+            .map_err(|e| Error::misc(format!("Could not build reqwest client: {:?}", e)))?;
 
         let feeds = read_feeds(db, &client, &config.feeds).await?;
         let mut rv = Vec::new();
@@ -110,13 +111,21 @@ pub fn get_summary_blocking(url: &str) -> Result<Option<TaskEntry>> {
     rt.block_on(async {
         let client = reqwest::Client::builder()
             .redirect(reqwest::RedirectPolicy::limited(10))
-            .build()?;
+            .build()
+            .map_err(|e| Error::misc(format!("Could not build reqwest client: {:?}", e)))?;
         Ok(get_summary(&client, url).await?)
     })
 }
 
 async fn get_page_body(client: &reqwest::Client, url: &str) -> Result<String> {
-    Ok(client.get(url).send().await?.text().await?)
+    Ok(client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| Error::misc(format!("Could not send get request: {:?}", e)))?
+        .text()
+        .await
+        .map_err(|e| Error::misc(format!("Could not get page body text: {:?}", e)))?)
 }
 
 /// Turns a url into a TaskEntry, suitable for use in the inbox.

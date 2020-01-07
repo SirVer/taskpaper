@@ -19,7 +19,6 @@ use std::path::{Path, PathBuf};
 pub enum Error {
     Misc(String),
     Other(Box<dyn ::std::error::Error>),
-    Reqwest(reqwest::Error),
     Io(io::Error),
     QuerySyntaxError(String),
 }
@@ -33,12 +32,6 @@ impl From<io::Error> for Error {
 impl From<Box<dyn ::std::error::Error>> for Error {
     fn from(other: Box<dyn ::std::error::Error>) -> Error {
         Error::Other(other)
-    }
-}
-
-impl From<reqwest::Error> for Error {
-    fn from(other: reqwest::Error) -> Error {
-        Error::Reqwest(other)
     }
 }
 
