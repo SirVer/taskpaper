@@ -16,7 +16,6 @@ pub fn extract_timeline(
     let mut sorted = BTreeMap::new();
     for mut item in items.into_iter().cloned() {
         let tags = match item {
-            taskpaper::Item::Note(_) => continue,
             taskpaper::Item::Task(ref t) => &t.tags,
             taskpaper::Item::Project(ref mut p) => {
                 // We only want to print the due item, not their children.

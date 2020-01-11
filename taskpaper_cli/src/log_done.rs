@@ -14,7 +14,6 @@ fn log_to_logbook(done: Vec<Item>, logbook: &mut TaskpaperFile) {
         let done = match &item {
             Item::Task(t) => t.tags.get("done").unwrap(),
             Item::Project(p) => p.tags.get("done").unwrap(),
-            Item::Note(_) => unreachable!(),
         };
         let parent_project = NaiveDate::parse_from_str(done.value.as_ref().unwrap(), "%Y-%m-%d")
             .unwrap()
@@ -74,7 +73,6 @@ fn move_repeated_items_to_tickle(repeat: Vec<Item>, tickle: &mut TaskpaperFile) 
                 }
                 &mut p.tags
             }
-            Item::Note(_) => unreachable!(),
         };
         let done_tag = &tags.get("done").unwrap().value.unwrap();
         let done_date = chrono::NaiveDate::parse_from_str(done_tag, "%Y-%m-%d")
@@ -97,7 +95,6 @@ fn move_repeated_items_to_tickle(repeat: Vec<Item>, tickle: &mut TaskpaperFile) 
     tickle.items.sort_by_key(|item| match item {
         Item::Project(p) => p.tags.get("to_inbox").unwrap().value.unwrap(),
         Item::Task(t) => t.tags.get("to_inbox").unwrap().value.unwrap(),
-        Item::Note(_) => unreachable!(),
     });
     Ok(())
 }
@@ -155,7 +152,6 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
                         new_items.push(Item::Task(t));
                     }
                 }
-                Item::Note(n) => new_items.push(Item::Note(n)),
             }
         }
         new_items

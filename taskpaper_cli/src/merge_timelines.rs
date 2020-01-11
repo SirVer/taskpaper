@@ -38,7 +38,7 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
                 }
                 None => into.items.push(Item::Project(p)),
             },
-            Item::Task(_) | Item::Note(_) => into.items.push(e),
+            Item::Task(_) => into.items.push(e),
         }
     }
 

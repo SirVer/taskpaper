@@ -28,7 +28,6 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
         let tags = match item {
             Item::Project(ref mut p) => &mut p.tags,
             Item::Task(ref mut t) => &mut t.tags,
-            _ => return,
         };
         for t in &args.tags {
             tags.remove(t.trim_start_matches("@"));

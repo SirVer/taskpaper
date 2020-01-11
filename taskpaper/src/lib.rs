@@ -93,7 +93,6 @@ fn sanitize(item: Item) -> Item {
                 children: p.children.into_iter().map(|e| sanitize(e)).collect(),
             })
         }
-        Item::Note(n) => Item::Note(n),
     }
 }
 
@@ -252,7 +251,6 @@ impl ToStringWithIndent for Note {
 pub enum Item {
     Task(Task),
     Project(Project),
-    Note(Note),
 }
 
 impl Item {
@@ -267,13 +265,11 @@ impl Item {
         match self {
             Item::Project(p) => p.line_index,
             Item::Task(t) => t.line_index,
-            Item::Note(_) => None,
         }
     }
 
     pub fn text(&self) -> &str {
         match self {
-            Item::Note(n) => &n.text,
             Item::Project(p) => &p.text,
             Item::Task(t) => &t.text,
         }
@@ -290,7 +286,6 @@ impl ToStringWithIndent for Item {
         match self {
             Item::Task(t) => t.append_to_string(buf, indent, options),
             Item::Project(p) => p.append_to_string(buf, indent, options),
-            Item::Note(n) => n.append_to_string(buf, indent, options),
         }
     }
 }
@@ -378,7 +373,6 @@ fn print_items(
             Item::Task(t) => {
                 t.append_to_string(buf, indent, options)?;
             }
-            Item::Note(n) => n.append_to_string(buf, indent, options)?,
         }
     }
     Ok(())
@@ -489,7 +483,7 @@ fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Item {
     match token.kind {
         LineKind::Task => Item::Task(parse_task(it)),
         LineKind::Project => Item::Project(parse_project(it)),
-        LineKind::Note => Item::Note(parse_note(it)),
+        LineKind::Note => panic!("Notes only supported as first children of tasks and projects."),
     }
 }
 
@@ -576,7 +570,6 @@ impl TaskpaperFile {
                         recurse(e, expr, out);
                     }
                 }
-                Item::Note(_) => (),
             }
         }
 
@@ -621,7 +614,6 @@ impl TaskpaperFile {
                             retained.push(Item::Project(p));
                         }
                     }
-                    Item::Note(n) => retained.push(Item::Note(n)),
                 }
             }
             retained
@@ -649,7 +641,7 @@ impl TaskpaperFile {
                         }
                     }
                 }
-                Item::Task(_) | Item::Note(_) => (),
+                Item::Task(_) => (),
             };
             None
         }
@@ -731,7 +723,6 @@ pub fn mirror_changes(
         }
 
         match (&items[0], e) {
-            (Item::Note(s), Item::Note(d)) => d.text = s.text.clone(),
             (Item::Project(s), Item::Project(d)) => {
                 d.text = s.text.clone();
                 d.tags = s.tags.clone();

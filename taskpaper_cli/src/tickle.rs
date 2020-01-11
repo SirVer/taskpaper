@@ -15,7 +15,6 @@ pub fn tickle(
         let tags = match item {
             Item::Project(ref mut p) => Some(&mut p.tags),
             Item::Task(ref mut t) => Some(&mut t.tags),
-            Item::Note(_) => None,
         };
 
         if let Some(tags) = tags {
@@ -35,7 +34,6 @@ pub fn tickle(
     tickle.items.sort_by_key(|item| match item {
         Item::Project(p) => p.tags.get("to_inbox").unwrap().value.unwrap(),
         Item::Task(t) => t.tags.get("to_inbox").unwrap().value.unwrap(),
-        Item::Note(_) => unreachable!(),
     });
 
     // Remove tickle items from tickle file and add to inbox.
