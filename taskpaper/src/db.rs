@@ -133,8 +133,8 @@ mod tests {
         );
         t.write_file(
             CommonFileKind::Tickle.to_path_buf(),
-            "- before entry @tickle(2018-09-01)\n \
-             - after entry @tickle(2018-10-02)\n",
+            "- before item @tickle(2018-09-01)\n \
+             - after item @tickle(2018-10-02)\n",
         );
 
         let _db = t.read_database();

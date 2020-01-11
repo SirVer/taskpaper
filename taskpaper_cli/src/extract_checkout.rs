@@ -22,19 +22,19 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
     ];
 
     for (title, query) in PROJECTS.iter() {
-        let entries = todo.search(query)?;
-        if entries.is_empty() {
+        let items = todo.search(query)?;
+        if items.is_empty() {
             continue;
         }
 
         checkout
-            .entries
-            .push(taskpaper::Entry::Project(taskpaper::Project {
+            .items
+            .push(taskpaper::Item::Project(taskpaper::Project {
                 line_index: None,
                 text: title.to_string(),
                 note: None,
                 tags: taskpaper::Tags::new(),
-                children: entries.iter().map(|e| (**e).clone()).collect(),
+                children: items.iter().map(|e| (**e).clone()).collect(),
             }));
     }
 

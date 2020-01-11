@@ -17,7 +17,7 @@ pub struct CommandLineArguments {
     #[structopt(short = "-d")]
     descendants: bool,
 
-    // TODO(sirver): Retain line number for entries.
+    // TODO(sirver): Retain line number for items.
     /// Print location (filename) for the match.
     #[structopt(short = "-l")]
     location: bool,

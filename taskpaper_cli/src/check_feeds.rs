@@ -35,7 +35,7 @@ pub struct CommandLineArguments {
 
 pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
-    let result: Result<Vec<TaskEntry>> = rt.block_on(async {
+    let result: Result<Vec<TaskItem>> = rt.block_on(async {
         let client = reqwest::Client::builder()
             .redirect(reqwest::RedirectPolicy::limited(10))
             .build()
@@ -45,8 +45,8 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
         let mut rv = Vec::new();
         for (feed, feed_config) in feeds.into_iter().zip(&config.feeds) {
             match feed {
-                Ok(feed_entries) => rv.extend(feed_entries.into_iter()),
-                Err(e) => rv.push(TaskEntry {
+                Ok(feed_items) => rv.extend(feed_items.into_iter()),
+                Err(e) => rv.push(TaskItem {
                     title: format!("Could not fetch RSS for '{}'.", feed_config.url),
                     note_text: textwrap::wrap(&format!("{:?}", e), 80)
                         .into_iter()
@@ -68,12 +68,12 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     tags.insert(taskpaper::Tag::new("reading".to_string(), None));
 
     let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
-    for entry in result? {
-        inbox.push_back(taskpaper::Entry::Task(taskpaper::Task {
+    for item in result? {
+        inbox.push_back(taskpaper::Item::Task(taskpaper::Task {
             line_index: None,
-            text: entry.title,
+            text: item.title,
             tags: tags.clone(),
-            note: Some(entry.note_text.join("\n")),
+            note: Some(item.note_text.join("\n")),
         }))
     }
     db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox, style)?;
@@ -88,7 +88,7 @@ struct SeenIds {
 
 /// Broken down information for tasks.
 #[derive(Debug)]
-pub struct TaskEntry {
+pub struct TaskItem {
     pub title: String,
     pub note_text: Vec<String>,
 }
@@ -106,7 +106,7 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
     Some(result)
 }
 
-pub fn get_summary_blocking(url: &str) -> Result<Option<TaskEntry>> {
+pub fn get_summary_blocking(url: &str) -> Result<Option<TaskItem>> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let client = reqwest::Client::builder()
@@ -128,8 +128,8 @@ async fn get_page_body(client: &reqwest::Client, url: &str) -> Result<String> {
         .map_err(|e| Error::misc(format!("Could not get page body text: {:?}", e)))?)
 }
 
-/// Turns a url into a TaskEntry, suitable for use in the inbox.
-async fn get_summary(client: &reqwest::Client, url: &str) -> Result<Option<TaskEntry>> {
+/// Turns a url into a TaskItem, suitable for use in the inbox.
+async fn get_summary(client: &reqwest::Client, url: &str) -> Result<Option<TaskItem>> {
     let text = get_page_body(client, url).await?;
     let soup = Soup::new(&text);
 
@@ -161,7 +161,7 @@ async fn get_summary(client: &reqwest::Client, url: &str) -> Result<Option<TaskE
     let mut note_text = Vec::new();
     note_text.push(url.to_string());
     note_text.extend(extra_notes.into_iter());
-    Ok(Some(TaskEntry {
+    Ok(Some(TaskItem {
         title: title_text_lines.join(" • "),
         note_text,
     }))
@@ -174,7 +174,7 @@ async fn get_summary_or_current_information(
     title: String,
     content: String,
     published: Option<DateTime<Utc>>,
-) -> Result<TaskEntry> {
+) -> Result<TaskItem> {
     let task = match feed_presentation {
         FeedPresentation::FromWebsite => get_summary(client, url)
             .await?
@@ -197,18 +197,19 @@ async fn get_summary_or_current_information(
                     _ => lines.into_iter().take(15),
                 });
             }
-            TaskEntry { title, note_text }
+            TaskItem { title, note_text }
         }
     };
     Ok(task)
 }
+
 /// Returns a vector of same length then feeds, which contains either an Err if the feed could not
-/// be read or a list of entries that we did not see before on any prior run.
+/// be read or a list of items that we did not see before on any prior run.
 async fn read_feeds(
     db: &Database,
     client: &reqwest::Client,
     feeds: &[FeedConfiguration],
-) -> Result<Vec<Result<Vec<TaskEntry>>>> {
+) -> Result<Vec<Result<Vec<TaskItem>>>> {
     let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
     let seen_ids = match fs::read_to_string(&archive) {
         Ok(data) => toml::from_str(&data)
@@ -226,20 +227,20 @@ async fn read_feeds(
 
         futures.push(async move {
             let body = get_page_body(client, &feed.url).await?;
-            let mut entries = Vec::new();
+            let mut items = Vec::new();
             match body
                 .parse::<Feed>()
                 .map_err(|e| Error::misc(format!("Could not parse for {}: {}", feed.url, e)))?
             {
                 Feed::RSS(channel) => {
-                    for entry in channel.items() {
-                        let url = entry.link();
+                    for item in channel.items() {
+                        let url = item.link();
                         if url.is_none() {
                             continue;
                         }
-                        let published = parse_date(entry.pub_date());
-                        let content = entry.content().or(entry.description()).unwrap_or("");
-                        let guid = entry
+                        let published = parse_date(item.pub_date());
+                        let content = item.content().or(item.description()).unwrap_or("");
+                        let guid = item
                             .guid()
                             .map(|g| g.value())
                             .unwrap_or(url.unwrap())
@@ -251,7 +252,7 @@ async fn read_feeds(
                             }
                         }
 
-                        let title = entry
+                        let title = item
                             .title()
                             .unwrap_or_else(|| "No Title")
                             .trim()
@@ -270,7 +271,7 @@ async fn read_feeds(
                             let mut seen_ids = seen_ids_ref.lock().unwrap();
                             seen_ids.seen_ids.insert(guid);
                         }
-                        entries.push(task);
+                        items.push(task);
                     }
                 }
                 Feed::Atom(channel) => {
@@ -311,11 +312,11 @@ async fn read_feeds(
                             let mut seen_ids = seen_ids_ref.lock().unwrap();
                             seen_ids.seen_ids.insert(guid);
                         }
-                        entries.push(task);
+                        items.push(task);
                     }
                 }
             };
-            let rv: Result<Vec<TaskEntry>> = Ok(entries);
+            let rv: Result<Vec<TaskItem>> = Ok(items);
             rv
         })
     }

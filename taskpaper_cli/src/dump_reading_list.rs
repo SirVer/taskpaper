@@ -17,7 +17,7 @@ pub struct CommandLineArguments {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-struct ReadingListEntry {
+struct ReadingListItem {
     date_added: DateTime<Utc>,
     date_last_viewed: Option<DateTime<Utc>>,
     preview_text: Option<String>,
@@ -25,19 +25,19 @@ struct ReadingListEntry {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-struct Entry {
+struct Item {
     title: Option<String>,
-    children: Option<Vec<Entry>>,
+    children: Option<Vec<Item>>,
     #[serde(rename = "URLString")]
     url_string: Option<String>,
-    reading_list: Option<ReadingListEntry>,
+    reading_list: Option<ReadingListItem>,
     #[serde(rename = "URIDictionary")]
     uri_dictionary: Option<HashMap<String, String>>,
 }
 
 pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
     let home = dirs::home_dir().expect("HOME not set.");
-    let plist: Entry = plist::from_file(&home.join("Library/Safari/Bookmarks.plist")).unwrap();
+    let plist: Item = plist::from_file(&home.join("Library/Safari/Bookmarks.plist")).unwrap();
     let c = plist
         .children
         .unwrap()
@@ -55,7 +55,7 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
         None
     };
 
-    let mut num_entries = 0;
+    let mut num_items = 0;
     for e in &c.children.unwrap() {
         let title = &e.uri_dictionary.as_ref().unwrap()["title"];
         let url = &e.url_string.as_ref().unwrap();
@@ -70,7 +70,7 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
         if !done_str.is_empty() && !args.done {
             continue;
         }
-        num_entries += 1;
+        num_items += 1;
         if args.inbox {
             let mut tags = Tags::new();
             tags.insert(taskpaper::Tag {
@@ -79,7 +79,7 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
             });
             tpf.as_mut()
                 .unwrap()
-                .push_back(taskpaper::Entry::Task(taskpaper::Task {
+                .push_back(taskpaper::Item::Task(taskpaper::Task {
                     line_index: None,
                     tags,
                     text: title.trim().to_string(),
@@ -105,6 +105,6 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
             },
         )
         .expect("Writing Inbox failed");
-        println!("Wrote {} entries into Inbox!", num_entries);
+        println!("Wrote {} items into Inbox!", num_items);
     });
 }

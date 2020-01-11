@@ -43,7 +43,7 @@ impl Error {
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
-fn sanitize(entry: Entry) -> Entry {
+fn sanitize(item: Item) -> Item {
     // Make sure the line does not contain a newline and does not end with ':'
     fn sanitize_note(s: Option<String>) -> Option<String> {
         match s {
@@ -70,14 +70,14 @@ fn sanitize(entry: Entry) -> Entry {
         s.replace('\n', " ").trim_end_matches(':').to_string()
     }
 
-    match entry {
-        Entry::Task(t) => Entry::Task(Task {
+    match item {
+        Item::Task(t) => Item::Task(Task {
             tags: t.tags,
             text: sanitize_text(t.text),
             note: sanitize_note(t.note),
             line_index: t.line_index,
         }),
-        Entry::Project(p) => {
+        Item::Project(p) => {
             let note = match p.note {
                 None => None,
                 Some(n) => {
@@ -85,7 +85,7 @@ fn sanitize(entry: Entry) -> Entry {
                     new_text.map(|text| Note { text })
                 }
             };
-            Entry::Project(Project {
+            Item::Project(Project {
                 line_index: p.line_index,
                 text: sanitize_text(p.text),
                 note,
@@ -93,7 +93,7 @@ fn sanitize(entry: Entry) -> Entry {
                 children: p.children.into_iter().map(|e| sanitize(e)).collect(),
             })
         }
-        Entry::Note(n) => Entry::Note(n),
+        Item::Note(n) => Item::Note(n),
     }
 }
 
@@ -103,16 +103,16 @@ pub struct Project {
     pub text: String,
     pub note: Option<Note>,
     pub tags: Tags,
-    pub children: Vec<Entry>,
+    pub children: Vec<Item>,
 }
 
 impl Project {
-    pub fn push_back(&mut self, entry: Entry) {
-        self.children.push(sanitize(entry));
+    pub fn push_back(&mut self, item: Item) {
+        self.children.push(sanitize(item));
     }
 
-    pub fn push_front(&mut self, entry: Entry) {
-        self.children.insert(0, sanitize(entry));
+    pub fn push_front(&mut self, item: Item) {
+        self.children.insert(0, sanitize(item));
     }
 }
 
@@ -202,7 +202,7 @@ impl ToStringWithIndent for Project {
         match options.print_children {
             PrintChildren::No => (),
             PrintChildren::Yes => {
-                print_entries(buf, self.children.iter().collect(), indent + 1, options)?
+                print_items(buf, self.children.iter().collect(), indent + 1, options)?
             }
         }
         Ok(())
@@ -249,38 +249,38 @@ impl ToStringWithIndent for Note {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Entry {
+pub enum Item {
     Task(Task),
     Project(Project),
     Note(Note),
 }
 
-impl Entry {
+impl Item {
     pub fn is_project(&self) -> bool {
         match *self {
-            Entry::Project(_) => true,
+            Item::Project(_) => true,
             _ => false,
         }
     }
 
     pub fn line_index(&self) -> Option<usize> {
         match self {
-            Entry::Project(p) => p.line_index,
-            Entry::Task(t) => t.line_index,
-            Entry::Note(_) => None,
+            Item::Project(p) => p.line_index,
+            Item::Task(t) => t.line_index,
+            Item::Note(_) => None,
         }
     }
 
     pub fn text(&self) -> &str {
         match self {
-            Entry::Note(n) => &n.text,
-            Entry::Project(p) => &p.text,
-            Entry::Task(t) => &t.text,
+            Item::Note(n) => &n.text,
+            Item::Project(p) => &p.text,
+            Item::Task(t) => &t.text,
         }
     }
 }
 
-impl ToStringWithIndent for Entry {
+impl ToStringWithIndent for Item {
     fn append_to_string(
         &self,
         buf: &mut String,
@@ -288,9 +288,9 @@ impl ToStringWithIndent for Entry {
         options: FormatOptions,
     ) -> fmt::Result {
         match self {
-            Entry::Task(t) => t.append_to_string(buf, indent, options),
-            Entry::Project(p) => p.append_to_string(buf, indent, options),
-            Entry::Note(n) => n.append_to_string(buf, indent, options),
+            Item::Task(t) => t.append_to_string(buf, indent, options),
+            Item::Project(p) => p.append_to_string(buf, indent, options),
+            Item::Note(n) => n.append_to_string(buf, indent, options),
         }
     }
 }
@@ -328,33 +328,33 @@ impl ToStringWithIndent for Task {
     }
 }
 
-impl ToStringWithIndent for [&Entry] {
+impl ToStringWithIndent for [&Item] {
     fn append_to_string(
         &self,
         buf: &mut String,
         indent: usize,
         options: FormatOptions,
     ) -> fmt::Result {
-        print_entries(buf, self.to_vec(), indent, options)?;
+        print_items(buf, self.to_vec(), indent, options)?;
         Ok(())
     }
 }
 
-fn print_entries(
+fn print_items(
     buf: &mut String,
-    mut entries: Vec<&Entry>,
+    mut items: Vec<&Item>,
     indent: usize,
     options: FormatOptions,
 ) -> fmt::Result {
     // Projects are bubbled to the top.
     match options.sort {
         Sort::Nothing => (),
-        Sort::ProjectsFirst => entries.sort_by_key(|a| !a.is_project()),
+        Sort::ProjectsFirst => items.sort_by_key(|a| !a.is_project()),
     }
 
     let maybe_empty_line = |buf: &mut String, idx: usize| -> fmt::Result {
         // Only if there is a next item and that is a project do we actually print a new line.
-        if let Some(s) = entries.get(idx + 1) {
+        if let Some(s) = items.get(idx + 1) {
             if s.is_project() {
                 writeln!(buf, "")?;
             }
@@ -362,9 +362,9 @@ fn print_entries(
         Ok(())
     };
 
-    for (idx, e) in entries.iter().enumerate() {
+    for (idx, e) in items.iter().enumerate() {
         match e {
-            Entry::Project(p) => {
+            Item::Project(p) => {
                 p.append_to_string(buf, indent, options)?;
                 let add_empty_line = match indent {
                     0 => options.empty_line_after_project.top_level,
@@ -375,10 +375,10 @@ fn print_entries(
                     maybe_empty_line(buf, idx)?;
                 }
             }
-            Entry::Task(t) => {
+            Item::Task(t) => {
                 t.append_to_string(buf, indent, options)?;
             }
-            Entry::Note(n) => n.append_to_string(buf, indent, options)?,
+            Item::Note(n) => n.append_to_string(buf, indent, options)?,
         }
     }
     Ok(())
@@ -455,7 +455,7 @@ fn parse_project(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Project 
         if nt.indent <= token.indent {
             break;
         }
-        children.push(parse_entry(it));
+        children.push(parse_item(it));
     }
 
     Project {
@@ -484,18 +484,18 @@ fn parse_note(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Note {
     }
 }
 
-fn parse_entry(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Entry {
+fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Item {
     let token = it.peek().unwrap();
     match token.kind {
-        LineKind::Task => Entry::Task(parse_task(it)),
-        LineKind::Project => Entry::Project(parse_project(it)),
-        LineKind::Note => Entry::Note(parse_note(it)),
+        LineKind::Task => Item::Task(parse_task(it)),
+        LineKind::Project => Item::Project(parse_project(it)),
+        LineKind::Note => Item::Note(parse_note(it)),
     }
 }
 
 #[derive(Debug)]
 pub struct TaskpaperFile {
-    pub entries: Vec<Entry>,
+    pub items: Vec<Item>,
 
     /// If this was loaded from a file, this will be set to the path of that file.
     path: Option<PathBuf>,
@@ -504,7 +504,7 @@ pub struct TaskpaperFile {
 impl TaskpaperFile {
     pub fn new() -> Self {
         TaskpaperFile {
-            entries: Vec::new(),
+            items: Vec::new(),
             path: None,
         }
     }
@@ -529,23 +529,20 @@ impl TaskpaperFile {
                 text: line.trim().to_string(),
             });
 
-        let mut entries = Vec::new();
+        let mut items = Vec::new();
         let mut it = lines.into_iter().peekable();
         while let Some(_) = it.peek() {
-            entries.push(parse_entry(&mut it));
+            items.push(parse_item(&mut it));
         }
-        Ok(TaskpaperFile {
-            entries,
-            path: None,
-        })
+        Ok(TaskpaperFile { items, path: None })
     }
 
-    pub fn push_back(&mut self, entry: Entry) {
-        self.entries.push(sanitize(entry));
+    pub fn push_back(&mut self, item: Item) {
+        self.items.push(sanitize(item));
     }
 
-    pub fn push_front(&mut self, entry: Entry) {
-        self.entries.insert(0, sanitize(entry));
+    pub fn push_front(&mut self, item: Item) {
+        self.items.insert(0, sanitize(item));
     }
 
     pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {
@@ -563,40 +560,40 @@ impl TaskpaperFile {
     }
 
     /// Return all objects that match 'query'.
-    pub fn search(&self, query: &str) -> Result<Vec<&Entry>> {
-        fn recurse<'a>(entry: &'a Entry, expr: &search::Expr, out: &mut Vec<&'a Entry>) {
-            match entry {
-                Entry::Task(task) => {
+    pub fn search(&self, query: &str) -> Result<Vec<&Item>> {
+        fn recurse<'a>(item: &'a Item, expr: &search::Expr, out: &mut Vec<&'a Item>) {
+            match item {
+                Item::Task(task) => {
                     if expr.evaluate(&task.tags).is_truish() {
-                        out.push(entry);
+                        out.push(item);
                     }
                 }
-                Entry::Project(project) => {
+                Item::Project(project) => {
                     if expr.evaluate(&project.tags).is_truish() {
-                        out.push(entry);
+                        out.push(item);
                     }
                     for e in &project.children {
                         recurse(e, expr, out);
                     }
                 }
-                Entry::Note(_) => (),
+                Item::Note(_) => (),
             }
         }
 
         let expr = search::Expr::parse(query)?;
         let mut out = Vec::new();
-        for e in &self.entries {
+        for e in &self.items {
             recurse(e, &expr, &mut out);
         }
         Ok(out)
     }
 
-    /// Find all entries with exactly the given text.
-    pub fn get_entries(&self, text: &str) -> Vec<&Entry> {
+    /// Find all items with exactly the given text.
+    pub fn get_items(&self, text: &str) -> Vec<&Item> {
         let mut result = Vec::new();
         self.map(|e| {
             if e.text() == text {
-                result.push(e as &Entry);
+                result.push(e as &Item);
             }
         });
         result
@@ -604,31 +601,27 @@ impl TaskpaperFile {
 
     /// Removes all items from 'self' that match 'query' and return them in the returned value.
     /// If a parent item matches, the children are not tested further.
-    pub fn filter(&mut self, query: &str) -> Result<Vec<Entry>> {
-        fn recurse(
-            entries: Vec<Entry>,
-            expr: &search::Expr,
-            filtered: &mut Vec<Entry>,
-        ) -> Vec<Entry> {
+    pub fn filter(&mut self, query: &str) -> Result<Vec<Item>> {
+        fn recurse(items: Vec<Item>, expr: &search::Expr, filtered: &mut Vec<Item>) -> Vec<Item> {
             let mut retained = Vec::new();
-            for e in entries {
+            for e in items {
                 match e {
-                    Entry::Task(t) => {
+                    Item::Task(t) => {
                         if expr.evaluate(&t.tags).is_truish() {
-                            filtered.push(Entry::Task(t));
+                            filtered.push(Item::Task(t));
                         } else {
-                            retained.push(Entry::Task(t));
+                            retained.push(Item::Task(t));
                         }
                     }
-                    Entry::Project(mut p) => {
+                    Item::Project(mut p) => {
                         if expr.evaluate(&p.tags).is_truish() {
-                            filtered.push(Entry::Project(p));
+                            filtered.push(Item::Project(p));
                         } else {
                             p.children = recurse(p.children, expr, filtered);
-                            retained.push(Entry::Project(p));
+                            retained.push(Item::Project(p));
                         }
                     }
-                    Entry::Note(n) => retained.push(Entry::Note(n)),
+                    Item::Note(n) => retained.push(Item::Note(n)),
                 }
             }
             retained
@@ -636,17 +629,17 @@ impl TaskpaperFile {
 
         let expr = search::Expr::parse(query)?;
         let mut filtered = Vec::new();
-        let mut entries = Vec::new();
-        ::std::mem::swap(&mut self.entries, &mut entries);
-        self.entries = recurse(entries, &expr, &mut filtered);
+        let mut items = Vec::new();
+        ::std::mem::swap(&mut self.items, &mut items);
+        self.items = recurse(items, &expr, &mut filtered);
         Ok(filtered)
     }
 
     /// Finds the first project with the given name.
     pub fn get_project_mut(&mut self, text: &str) -> Option<&mut Project> {
-        fn recurse<'a>(entry: &'a mut Entry, text: &str) -> Option<&'a mut Project> {
-            match entry {
-                Entry::Project(project) => {
+        fn recurse<'a>(item: &'a mut Item, text: &str) -> Option<&'a mut Project> {
+            match item {
+                Item::Project(project) => {
                     if project.text == text {
                         return Some(project);
                     }
@@ -656,12 +649,12 @@ impl TaskpaperFile {
                         }
                     }
                 }
-                Entry::Task(_) | Entry::Note(_) => (),
+                Item::Task(_) | Item::Note(_) => (),
             };
             None
         }
 
-        for e in &mut self.entries {
+        for e in &mut self.items {
             if let Some(child) = recurse(e, text) {
                 return Some(child);
             }
@@ -669,36 +662,36 @@ impl TaskpaperFile {
         None
     }
 
-    /// Call `f` on all entries in this file in order of appearance in the file, including all
+    /// Call `f` on all items in this file in order of appearance in the file, including all
     /// children of projects.
-    pub fn map_mut(&mut self, mut f: impl Fn(&mut Entry)) {
-        fn recurse(entries: &mut [Entry], f: &mut impl FnMut(&mut Entry)) {
-            for e in entries.iter_mut() {
+    pub fn map_mut(&mut self, mut f: impl Fn(&mut Item)) {
+        fn recurse(items: &mut [Item], f: &mut impl FnMut(&mut Item)) {
+            for e in items.iter_mut() {
                 f(e);
                 match e {
-                    Entry::Project(ref mut p) => {
+                    Item::Project(ref mut p) => {
                         recurse(&mut p.children, f);
                     }
                     _ => (),
                 }
             }
         }
-        recurse(&mut self.entries, &mut f);
+        recurse(&mut self.items, &mut f);
     }
 
-    pub fn map<'a>(&'a self, mut f: impl FnMut(&'a Entry)) {
-        fn recurse<'b>(entries: &'b [Entry], f: &mut impl FnMut(&'b Entry)) {
-            for e in entries.iter() {
+    pub fn map<'a>(&'a self, mut f: impl FnMut(&'a Item)) {
+        fn recurse<'b>(items: &'b [Item], f: &mut impl FnMut(&'b Item)) {
+            for e in items.iter() {
                 f(e);
                 match e {
-                    Entry::Project(ref p) => {
+                    Item::Project(ref p) => {
                         recurse(&p.children, f);
                     }
                     _ => (),
                 }
             }
         }
-        recurse(&self.entries, &mut f);
+        recurse(&self.items, &mut f);
     }
 }
 
@@ -709,8 +702,8 @@ impl ToStringWithIndent for TaskpaperFile {
         indent: usize,
         options: FormatOptions,
     ) -> fmt::Result {
-        let entries: Vec<&Entry> = self.entries.iter().collect();
-        &entries.append_to_string(buf, indent, options)?;
+        let items: Vec<&Item> = self.items.iter().collect();
+        &items.append_to_string(buf, indent, options)?;
 
         Ok(())
     }
@@ -732,21 +725,21 @@ pub fn mirror_changes(
 
     let source = TaskpaperFile::parse_file(source_path)?;
     destination.map_mut(|e| {
-        let entries = source.get_entries(e.text());
-        if entries.is_empty() {
+        let items = source.get_items(e.text());
+        if items.is_empty() {
             return;
         }
 
-        match (&entries[0], e) {
-            (Entry::Note(s), Entry::Note(d)) => d.text = s.text.clone(),
-            (Entry::Project(s), Entry::Project(d)) => {
+        match (&items[0], e) {
+            (Item::Note(s), Item::Note(d)) => d.text = s.text.clone(),
+            (Item::Project(s), Item::Project(d)) => {
                 d.text = s.text.clone();
                 d.tags = s.tags.clone();
                 if s.note.is_some() {
                     d.note = s.note.clone();
                 }
             }
-            (Entry::Task(s), Entry::Task(d)) => {
+            (Item::Task(s), Item::Task(d)) => {
                 d.text = s.text.clone();
                 d.tags = s.tags.clone();
                 if s.note.is_some() {
@@ -769,7 +762,7 @@ mod tests {
     #[test]
     fn test_simple_task_parse() {
         let input = r"- A task @tag1 @tag2";
-        let golden = vec![Entry::Task(Task {
+        let golden = vec![Item::Task(Task {
             line_index: Some(0),
             text: "A task".to_string(),
             tags: {
@@ -787,13 +780,13 @@ mod tests {
             note: None,
         })];
         let output = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(golden, output.entries);
+        assert_eq!(golden, output.items);
     }
 
     #[test]
     fn test_task_with_mixed_tags_parse() {
         let input = r"- A task @done(2018-08-05) @another(foo bar) @tag1 @tag2";
-        let golden = vec![Entry::Task(Task {
+        let golden = vec![Item::Task(Task {
             text: "A task".to_string(),
             line_index: Some(0),
             tags: {
@@ -819,7 +812,7 @@ mod tests {
             note: None,
         })];
         let output = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(golden, output.entries);
+        assert_eq!(golden, output.items);
     }
 
     #[test]

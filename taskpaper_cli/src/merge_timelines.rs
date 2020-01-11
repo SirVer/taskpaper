@@ -2,7 +2,7 @@ use crate::ConfigurationFile;
 use chrono::NaiveDate;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{Entry, Error, Result, TaskpaperFile};
+use taskpaper::{Error, Item, Result, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -28,28 +28,28 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
     let from = TaskpaperFile::parse_file(&args.from)?;
     let mut into = TaskpaperFile::parse_file(&args.into)?;
 
-    for e in from.entries {
+    for e in from.items {
         match e {
-            Entry::Project(p) => match into.get_project_mut(&p.text) {
+            Item::Project(p) => match into.get_project_mut(&p.text) {
                 Some(other) => {
                     for e in p.children {
                         other.children.push(e);
                     }
                 }
-                None => into.entries.push(Entry::Project(p)),
+                None => into.items.push(Item::Project(p)),
             },
-            Entry::Task(_) | Entry::Note(_) => into.entries.push(e),
+            Item::Task(_) | Item::Note(_) => into.items.push(e),
         }
     }
 
-    into.entries.sort_by_key(|e| match e {
-        Entry::Project(p) => match NaiveDate::parse_from_str(&p.text, "%A, %d. %B %Y") {
+    into.items.sort_by_key(|e| match e {
+        Item::Project(p) => match NaiveDate::parse_from_str(&p.text, "%A, %d. %B %Y") {
             Ok(v) => v,
             Err(_) => panic!("Encountered unexpected date formatting: {}", p.text),
         },
         _ => panic!("Only expected projects!"),
     });
-    into.entries.reverse();
+    into.items.reverse();
     into.write(&args.into, *style)?;
     Ok(())
 }

@@ -35,7 +35,7 @@ pub struct CommandLineArguments {
     #[structopt(parse(from_os_str), short = "-f")]
     file: Option<PathBuf>,
 
-    /// The project to add this item to. If empty, it will be added to the entries of the file.
+    /// The project to add this item to. If empty, it will be added to the items of the file.
     #[structopt(long = "--project")]
     project: Option<String>,
 
@@ -43,7 +43,7 @@ pub struct CommandLineArguments {
     #[structopt(long = "--prepend")]
     prepend: bool,
 
-    /// Tags to add to this entry (including @).
+    /// Tags to add to this item (including @).
     #[structopt(long = "--tag")]
     tags: Vec<String>,
 }
@@ -90,7 +90,7 @@ pub fn line_to_task(
     verbatim: bool,
     mail: bool,
     additional_tags: &[String],
-) -> Result<taskpaper::Entry> {
+) -> Result<taskpaper::Item> {
     let mut line_with_tags = line.trim().to_string();
 
     if base64 {
@@ -139,7 +139,7 @@ pub fn line_to_task(
         Some(note_text.join("\n"))
     };
 
-    Ok(taskpaper::Entry::Task(taskpaper::Task {
+    Ok(taskpaper::Item::Task(taskpaper::Task {
         line_index: None,
         text: line_without_tags,
         tags,

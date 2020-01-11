@@ -4,17 +4,17 @@ use lazy_static::lazy_static;
 use std::borrow::Cow;
 use structopt::StructOpt;
 use taskpaper::Error;
-use taskpaper::{Database, Entry, Result, Tag, TaskpaperFile};
+use taskpaper::{Database, Item, Result, Tag, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
 
-fn log_to_logbook(done: Vec<Entry>, logbook: &mut TaskpaperFile) {
-    for entry in done {
-        let done = match &entry {
-            Entry::Task(t) => t.tags.get("done").unwrap(),
-            Entry::Project(p) => p.tags.get("done").unwrap(),
-            Entry::Note(_) => unreachable!(),
+fn log_to_logbook(done: Vec<Item>, logbook: &mut TaskpaperFile) {
+    for item in done {
+        let done = match &item {
+            Item::Task(t) => t.tags.get("done").unwrap(),
+            Item::Project(p) => p.tags.get("done").unwrap(),
+            Item::Note(_) => unreachable!(),
         };
         let parent_project = NaiveDate::parse_from_str(done.value.as_ref().unwrap(), "%Y-%m-%d")
             .unwrap()
@@ -23,7 +23,7 @@ fn log_to_logbook(done: Vec<Entry>, logbook: &mut TaskpaperFile) {
         let project = match logbook.get_project_mut(&parent_project) {
             Some(p) => p,
             None => {
-                logbook.entries.push(Entry::Project(taskpaper::Project {
+                logbook.items.push(Item::Project(taskpaper::Project {
                     line_index: None,
                     text: parent_project.to_string(),
                     note: None,
@@ -33,16 +33,16 @@ fn log_to_logbook(done: Vec<Entry>, logbook: &mut TaskpaperFile) {
                 logbook.get_project_mut(&parent_project).unwrap()
             }
         };
-        project.children.push(entry);
+        project.children.push(item);
     }
-    logbook.entries.sort_by_key(|e| match e {
-        Entry::Project(p) => match NaiveDate::parse_from_str(&p.text, "%A, %d. %B %Y") {
+    logbook.items.sort_by_key(|item| match item {
+        Item::Project(p) => match NaiveDate::parse_from_str(&p.text, "%A, %d. %B %Y") {
             Ok(v) => v,
             Err(_) => panic!("Encountered unexpected date formatting: {}", p.text),
         },
         _ => panic!("Only expected projects!"),
     });
-    logbook.entries.reverse();
+    logbook.items.reverse();
 }
 
 fn reset_boxes(text: &str) -> String {
@@ -58,23 +58,23 @@ fn reset_boxes(text: &str) -> String {
         .join("\n")
 }
 
-fn move_repeated_items_to_tickle(repeat: Vec<Entry>, tickle: &mut TaskpaperFile) -> Result<()> {
-    for mut e in repeat {
+fn move_repeated_items_to_tickle(repeat: Vec<Item>, tickle: &mut TaskpaperFile) -> Result<()> {
+    for mut item in repeat {
         // Get tags but also remove boxes [X] => [_]
-        let tags = match e {
-            Entry::Task(ref mut t) => {
+        let tags = match item {
+            Item::Task(ref mut t) => {
                 if let Some(n) = &t.note {
                     t.note = Some(reset_boxes(&n));
                 }
                 &mut t.tags
             }
-            Entry::Project(ref mut p) => {
+            Item::Project(ref mut p) => {
                 if let Some(n) = &mut p.note {
                     n.text = reset_boxes(&n.text);
                 }
                 &mut p.tags
             }
-            Entry::Note(_) => unreachable!(),
+            Item::Note(_) => unreachable!(),
         };
         let done_tag = &tags.get("done").unwrap().value.unwrap();
         let done_date = chrono::NaiveDate::parse_from_str(done_tag, "%Y-%m-%d")
@@ -92,12 +92,12 @@ fn move_repeated_items_to_tickle(repeat: Vec<Entry>, tickle: &mut TaskpaperFile)
             name: "to_inbox".to_string(),
             value: Some(to_inbox),
         });
-        tickle.entries.push(e);
+        tickle.items.push(item);
     }
-    tickle.entries.sort_by_key(|e| match e {
-        Entry::Project(p) => p.tags.get("to_inbox").unwrap().value.unwrap(),
-        Entry::Task(t) => t.tags.get("to_inbox").unwrap().value.unwrap(),
-        Entry::Note(_) => unreachable!(),
+    tickle.items.sort_by_key(|item| match item {
+        Item::Project(p) => p.tags.get("to_inbox").unwrap().value.unwrap(),
+        Item::Task(t) => t.tags.get("to_inbox").unwrap().value.unwrap(),
+        Item::Note(_) => unreachable!(),
     });
     Ok(())
 }
@@ -111,15 +111,15 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
     // maybe not, since we are collecting the 'parent_texts'.
     fn recurse(
         parent_texts: &[String],
-        entries: Vec<Entry>,
-        done: &mut Vec<Entry>,
-        repeat: &mut Vec<Entry>,
-    ) -> Vec<Entry> {
+        items: Vec<Item>,
+        done: &mut Vec<Item>,
+        repeat: &mut Vec<Item>,
+    ) -> Vec<Item> {
         let today = chrono::Local::now().date().format("%Y-%m-%d").to_string();
-        let mut new_entries = Vec::new();
-        for e in entries {
-            match e {
-                Entry::Project(mut p) => {
+        let mut new_items = Vec::new();
+        for item in items {
+            match item {
+                Item::Project(mut p) => {
                     let mut children_parent_texts = parent_texts.to_vec();
                     children_parent_texts.push(p.text.to_string());
                     p.children = recurse(&children_parent_texts, p.children, done, repeat);
@@ -131,15 +131,15 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
                             p.tags.insert(tag);
                         }
                         if p.tags.get("repeat").is_some() {
-                            repeat.push(Entry::Project(p.clone()));
+                            repeat.push(Item::Project(p.clone()));
                         }
                         p.text = format!("{} • {}", parent_texts.join(" • "), p.text);
-                        done.push(Entry::Project(p));
+                        done.push(Item::Project(p));
                     } else {
-                        new_entries.push(Entry::Project(p));
+                        new_items.push(Item::Project(p));
                     }
                 }
-                Entry::Task(mut t) => {
+                Item::Task(mut t) => {
                     if t.tags.contains("done") {
                         let mut tag = t.tags.get("done").unwrap();
                         if tag.value.is_none() {
@@ -147,23 +147,23 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
                             t.tags.insert(tag);
                         }
                         if t.tags.get("repeat").is_some() {
-                            repeat.push(Entry::Task(t.clone()));
+                            repeat.push(Item::Task(t.clone()));
                         }
                         t.text = format!("{} • {}", parent_texts.join(" • "), t.text);
-                        done.push(Entry::Task(t));
+                        done.push(Item::Task(t));
                     } else {
-                        new_entries.push(Entry::Task(t));
+                        new_items.push(Item::Task(t));
                     }
                 }
-                Entry::Note(n) => new_entries.push(Entry::Note(n)),
+                Item::Note(n) => new_items.push(Item::Note(n)),
             }
         }
-        new_entries
+        new_items
     }
 
     let mut done = Vec::new();
     let mut repeat = Vec::new();
-    todo.entries = recurse(&Vec::new(), todo.entries, &mut done, &mut repeat);
+    todo.items = recurse(&Vec::new(), todo.items, &mut done, &mut repeat);
 
     move_repeated_items_to_tickle(repeat, &mut tickle)?;
     log_to_logbook(done, &mut logbook);

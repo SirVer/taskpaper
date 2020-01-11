@@ -12,13 +12,13 @@ pub fn extract_timeline(
     }
     let today = chrono::Local::now().naive_local().date();
     let mut timeline = TaskpaperFile::new();
-    let entries = todo.search("@due and not @done")?;
+    let items = todo.search("@due and not @done")?;
     let mut sorted = BTreeMap::new();
-    for mut entry in entries.into_iter().cloned() {
-        let tags = match entry {
-            taskpaper::Entry::Note(_) => continue,
-            taskpaper::Entry::Task(ref t) => &t.tags,
-            taskpaper::Entry::Project(ref mut p) => {
+    for mut item in items.into_iter().cloned() {
+        let tags = match item {
+            taskpaper::Item::Note(_) => continue,
+            taskpaper::Item::Task(ref t) => &t.tags,
+            taskpaper::Item::Project(ref mut p) => {
                 // We only want to print the due item, not their children.
                 p.children.clear();
                 &p.tags
@@ -34,10 +34,10 @@ pub fn extract_timeline(
         if due < today {
             due = today.pred();
         }
-        sorted.entry(due).or_insert(Vec::new()).push(entry);
+        sorted.entry(due).or_insert(Vec::new()).push(item);
     }
 
-    for (due, due_entries) in sorted {
+    for (due, due_items) in sorted {
         let diff_days = due.signed_duration_since(today).num_days();
         let title = match diff_days {
             0 => "Today".to_string(),
@@ -51,13 +51,13 @@ pub fn extract_timeline(
         };
 
         timeline
-            .entries
-            .push(taskpaper::Entry::Project(taskpaper::Project {
+            .items
+            .push(taskpaper::Item::Project(taskpaper::Project {
                 line_index: None,
                 text: title.to_string(),
                 note: None,
                 tags: taskpaper::Tags::new(),
-                children: due_entries,
+                children: due_items,
             }));
     }
     db.overwrite_common_file(

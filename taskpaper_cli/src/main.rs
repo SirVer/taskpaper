@@ -59,10 +59,10 @@ struct CommandLineArguments {
 #[structopt(rename_all = "verbatim")]
 enum Command {
     /// Add items to the inbox.
-    /// This is smart about ',' and '.' as first entries to add a note with the contents of the
+    /// This is smart about ',' and '.' as first character to add a note with the contents of the
     /// clipboard to every task that is added. Under Linux ',' is primary, i.e. the last mouse
-    /// selection, while '.' is the X11 clipboard (copy & pasted). There is no distinction under Mac OS
-    /// since there is only one clipboard.
+    /// selection, while '.' is the X11 clipboard (copy & pasted). There is no distinction under
+    /// Mac OS since there is only one clipboard.
     #[structopt(name = "2inbox")]
     ToInbox(to_inbox::CommandLineArguments),
 
