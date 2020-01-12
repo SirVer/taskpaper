@@ -13,7 +13,6 @@ mod filter;
 mod format;
 mod housekeeping;
 mod log_done;
-mod merge_timelines;
 mod purge_tags;
 mod search;
 mod tickle;
@@ -78,11 +77,6 @@ enum Command {
     #[structopt(name = "search")]
     Search(search::CommandLineArguments),
 
-    /// Merge one taskpaper file into another on a project level. All top level items that are not
-    /// in both are appended to the end.
-    #[structopt(name = "merge_timelines")]
-    MergeTimelines(merge_timelines::CommandLineArguments),
-
     /// Log everything marked as done into the logbook.
     #[structopt(name = "log_done")]
     LogDone(log_done::CommandLineArguments),
@@ -130,7 +124,6 @@ fn main() {
         Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args, &config).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
         Some(Command::Housekeeping(args)) => housekeeping::run(&db, &args, &config).unwrap(),
-        Some(Command::MergeTimelines(args)) => merge_timelines::run(&args, &config).unwrap(),
         Some(Command::LogDone(args)) => log_done::run(&db, &args, &config).unwrap(),
         Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
         Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
