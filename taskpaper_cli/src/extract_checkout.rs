@@ -1,4 +1,4 @@
-use taskpaper::{Database, Result, TaskpaperFile};
+use taskpaper::{Database, Level, Position, Result, TaskpaperFile};
 
 pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
     if let Some(path) = db.path_of_common_file(taskpaper::CommonFileKind::Checkout) {
@@ -22,20 +22,28 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
     ];
 
     for (title, query) in PROJECTS.iter() {
-        let items = todo.search(query)?;
-        if items.is_empty() {
+        let node_ids = todo.search(query)?;
+        if node_ids.is_empty() {
             continue;
         }
 
-        checkout
-            .items
-            .push(taskpaper::Item::Project(taskpaper::Project {
+        let project_id = checkout.insert(
+            taskpaper::Item::Project(taskpaper::Project {
                 line_index: None,
                 text: title.to_string(),
                 note: None,
                 tags: taskpaper::Tags::new(),
-                children: items.iter().map(|e| (**e).clone()).collect(),
-            }));
+            }),
+            Level::Top,
+            Position::AsLast,
+        );
+        for node_id in &node_ids {
+            checkout.insert(
+                todo[node_id].item().clone(),
+                Level::Under(&project_id),
+                Position::AsLast,
+            );
+        }
     }
 
     db.overwrite_common_file(

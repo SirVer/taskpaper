@@ -1,6 +1,6 @@
 use crate::ConfigurationFile;
 use std::collections::BTreeMap;
-use taskpaper::{Database, Error, Result, TaskpaperFile};
+use taskpaper::{Database, Error, Level, Position, Result, TaskpaperFile};
 
 pub fn extract_timeline(
     db: &Database,
@@ -12,22 +12,19 @@ pub fn extract_timeline(
     }
     let today = chrono::Local::now().naive_local().date();
     let mut timeline = TaskpaperFile::new();
-    let items = todo.search("@due and not @done")?;
+    let node_ids = todo.search("@due and not @done")?;
     let mut sorted = BTreeMap::new();
-    for mut item in items.into_iter().cloned() {
+    for node_id in &node_ids {
+        let item = todo[node_id].item();
         let tags = match item {
-            taskpaper::Item::Task(ref t) => &t.tags,
-            taskpaper::Item::Project(ref mut p) => {
-                // We only want to print the due item, not their children.
-                p.children.clear();
-                &p.tags
-            }
+            taskpaper::Item::Task(t) => &t.tags,
+            taskpaper::Item::Project(p) => &p.tags,
         };
-        let due = tags.get("due").unwrap().value;
-        if due.is_none() {
-            continue;
-        }
-        let due = due.unwrap();
+
+        let due = match tags.get("due").unwrap().value {
+            None => continue,
+            Some(v) => v,
+        };
         let mut due = chrono::NaiveDate::parse_from_str(&due, "%Y-%m-%d")
             .map_err(|_| Error::misc(format!("Invalid date: {}", due)))?;
         if due < today {
@@ -49,15 +46,20 @@ pub fn extract_timeline(
             ),
         };
 
-        timeline
-            .items
-            .push(taskpaper::Item::Project(taskpaper::Project {
+        let project_id = timeline.insert(
+            taskpaper::Item::Project(taskpaper::Project {
                 line_index: None,
                 text: title.to_string(),
                 note: None,
                 tags: taskpaper::Tags::new(),
-                children: due_items,
-            }));
+            }),
+            Level::Top,
+            Position::AsLast,
+        );
+
+        for item in due_items {
+            timeline.insert(item.clone(), Level::Under(&project_id), Position::AsLast);
+        }
     }
     db.overwrite_common_file(
         &timeline,

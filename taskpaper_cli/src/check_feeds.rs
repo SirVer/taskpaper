@@ -7,7 +7,7 @@ use std::fs;
 use std::io;
 use structopt::StructOpt;
 use syndication::Feed;
-use taskpaper::{Database, Error, Result};
+use taskpaper::{Database, Error, Level, Position, Result};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
 
@@ -69,12 +69,16 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
 
     let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
     for item in result? {
-        inbox.push_back(taskpaper::Item::Task(taskpaper::Task {
-            line_index: None,
-            text: item.title,
-            tags: tags.clone(),
-            note: Some(item.note_text.join("\n")),
-        }))
+        inbox.insert(
+            taskpaper::Item::Task(taskpaper::Task {
+                line_index: None,
+                text: item.title,
+                tags: tags.clone(),
+                note: Some(item.note_text.join("\n")),
+            }),
+            Level::Top,
+            Position::AsLast,
+        );
     }
     db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox, style)?;
 

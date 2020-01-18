@@ -54,8 +54,8 @@ pub fn search(
     }
 
     let mut results: HashMap<&Path, _> = HashMap::new();
-    for (path, tpf) in &files {
-        results.insert(path as &Path, tpf.search(&query)?);
+    for (path, tpf) in files {
+        results.insert(path as &Path, (tpf.search(&query)?, tpf));
     }
 
     let options = taskpaper::FormatOptions {
@@ -73,16 +73,18 @@ pub fn search(
         ..Default::default()
     };
 
-    let mut files: Vec<_> = results.keys().collect();
-    files.sort();
-    for f in files {
-        if results[f].is_empty() {
+    let mut paths: Vec<_> = results.keys().collect();
+    paths.sort();
+    for path in paths {
+        let (node_ids, tpf) = &results[path];
+        if node_ids.is_empty() {
             continue;
         }
-        for result in &results[f] {
-            let line = result.line_index().unwrap() + 1;
-            let text = result.to_string(0, options);
-            print!("{}:{}:{}", f.display(), line, text);
+        for node_id in node_ids {
+            let item = tpf[node_id].item();
+            let line = item.line_index().unwrap() + 1;
+            let text = item.to_string(0, options);
+            print!("{}:{}:{}", path.display(), line, text);
         }
     }
 

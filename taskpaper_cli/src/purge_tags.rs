@@ -24,15 +24,15 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
     };
 
     let mut input = TaskpaperFile::parse_file(&args.input)?;
-    input.map_mut(|item| {
-        let tags = match item {
+    for mut node in &mut input {
+        let tags = match node.item_mut() {
             Item::Project(ref mut p) => &mut p.tags,
             Item::Task(ref mut t) => &mut t.tags,
         };
         for t in &args.tags {
             tags.remove(t.trim_start_matches("@"));
         }
-    });
+    }
 
     input.write(&args.input, style)?;
     Ok(())

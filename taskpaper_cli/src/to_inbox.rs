@@ -6,8 +6,7 @@ use osascript::JavaScript;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::tag;
-use taskpaper::{Database, Error, Result};
+use taskpaper::{tag, Database, Error, Item, NodeId, Result, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -147,6 +146,16 @@ pub fn line_to_task(
     }))
 }
 
+fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
+    for node in tpf {
+        match node.item() {
+            Item::Project(p) if p.text == text => return Some(node.id().clone()),
+            _ => (),
+        }
+    }
+    None
+}
+
 pub fn to_inbox(
     db: &Database,
     args: &CommandLineArguments,
@@ -163,10 +172,19 @@ pub fn to_inbox(
         None => db.parse_common_file(taskpaper::CommonFileKind::Inbox)?,
     };
 
-    if let Some(p) = &args.project {
-        tpf.get_project_mut(p)
+    let node_id;
+    let level = if let Some(p) = &args.project {
+        node_id = find_project(&tpf, p)
             .ok_or_else(|| Error::misc(format!("Could not find project '{}'.", p)))?;
-    }
+        taskpaper::Level::Under(&node_id)
+    } else {
+        taskpaper::Level::Top
+    };
+    let position = if args.prepend {
+        taskpaper::Position::AsFirst
+    } else {
+        taskpaper::Position::AsLast
+    };
 
     let style = match config.formats.get(&args.style) {
         Some(format) => *format,
@@ -189,25 +207,7 @@ pub fn to_inbox(
 
     for line in lines {
         let task = line_to_task(line, args.base64, args.verbatim, args.mail, &args.tags)?;
-        match &args.project {
-            None => {
-                if args.prepend {
-                    tpf.push_front(task)
-                } else {
-                    tpf.push_back(task)
-                }
-            }
-            Some(p) => {
-                let project = tpf
-                    .get_project_mut(p)
-                    .expect("Already checked above that it exists.");
-                if args.prepend {
-                    project.push_front(task)
-                } else {
-                    project.push_back(task)
-                }
-            }
-        }
+        tpf.insert(task, level, position);
     }
 
     match &args.file {

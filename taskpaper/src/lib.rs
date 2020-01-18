@@ -9,10 +9,37 @@ pub mod testing;
 pub use crate::tag::{Tag, Tags};
 pub use db::{CommonFileKind, Database};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fmt::{self, Write};
 use std::io;
 use std::iter::Peekable;
+use std::mem;
+use std::ops::{Index, IndexMut};
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone)]
+pub struct NodeId(usize);
+
+#[derive(Debug)]
+pub struct Node {
+    parent: Option<NodeId>,
+    children: Vec<NodeId>,
+    item: Item,
+}
+
+impl Node {
+    pub fn item(&self) -> &Item {
+        &self.item
+    }
+
+    pub fn item_mut(&mut self) -> &mut Item {
+        &mut self.item
+    }
+
+    pub fn parent(&self) -> Option<&NodeId> {
+        self.parent.as_ref()
+    }
+}
 
 // TODO(sirver): Convert to use thiserror
 #[derive(Debug)]
@@ -90,7 +117,6 @@ fn sanitize(item: Item) -> Item {
                 text: sanitize_text(p.text),
                 note,
                 tags: p.tags,
-                children: p.children.into_iter().map(|e| sanitize(e)).collect(),
             })
         }
     }
@@ -102,17 +128,6 @@ pub struct Project {
     pub text: String,
     pub note: Option<Note>,
     pub tags: Tags,
-    pub children: Vec<Item>,
-}
-
-impl Project {
-    pub fn push_back(&mut self, item: Item) {
-        self.children.push(sanitize(item));
-    }
-
-    pub fn push_front(&mut self, item: Item) {
-        self.children.insert(0, sanitize(item));
-    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -198,12 +213,6 @@ impl ToStringWithIndent for Project {
             }
         }
 
-        match options.print_children {
-            PrintChildren::No => (),
-            PrintChildren::Yes => {
-                print_items(buf, self.children.iter().collect(), indent + 1, options)?
-            }
-        }
         Ok(())
     }
 }
@@ -274,6 +283,20 @@ impl Item {
             Item::Task(t) => &t.text,
         }
     }
+
+    pub fn tags(&self) -> &Tags {
+        match self {
+            Item::Project(p) => &p.tags,
+            Item::Task(t) => &t.tags,
+        }
+    }
+
+    pub fn tags_mut(&mut self) -> &mut Tags {
+        match self {
+            Item::Project(p) => &mut p.tags,
+            Item::Task(t) => &mut t.tags,
+        }
+    }
 }
 
 impl ToStringWithIndent for Item {
@@ -323,56 +346,55 @@ impl ToStringWithIndent for Task {
     }
 }
 
-impl ToStringWithIndent for [&Item] {
-    fn append_to_string(
-        &self,
-        buf: &mut String,
-        indent: usize,
-        options: FormatOptions,
-    ) -> fmt::Result {
-        print_items(buf, self.to_vec(), indent, options)?;
-        Ok(())
-    }
-}
-
-fn print_items(
+fn print_nodes(
+    mut node_ids: Vec<NodeId>,
+    arena: &[Node],
     buf: &mut String,
-    mut items: Vec<&Item>,
     indent: usize,
     options: FormatOptions,
 ) -> fmt::Result {
     // Projects are bubbled to the top.
     match options.sort {
         Sort::Nothing => (),
-        Sort::ProjectsFirst => items.sort_by_key(|a| !a.is_project()),
+        Sort::ProjectsFirst => node_ids.sort_by_key(|id| !arena[id.0].item.is_project()),
     }
 
     let maybe_empty_line = |buf: &mut String, idx: usize| -> fmt::Result {
         // Only if there is a next item and that is a project do we actually print a new line.
-        if let Some(s) = items.get(idx + 1) {
-            if s.is_project() {
+        if let Some(id) = node_ids.get(idx + 1) {
+            if arena[id.0].item.is_project() {
                 writeln!(buf, "")?;
             }
         }
         Ok(())
     };
 
-    for (idx, e) in items.iter().enumerate() {
-        match e {
+    for (idx, id) in node_ids.iter().enumerate() {
+        let node = &arena[id.0];
+        let add_empty_line = match &node.item {
             Item::Project(p) => {
                 p.append_to_string(buf, indent, options)?;
-                let add_empty_line = match indent {
+                match indent {
                     0 => options.empty_line_after_project.top_level,
                     1 => options.empty_line_after_project.first_level,
                     _ => options.empty_line_after_project.others,
-                };
-                for _ in 0..add_empty_line {
-                    maybe_empty_line(buf, idx)?;
                 }
             }
             Item::Task(t) => {
                 t.append_to_string(buf, indent, options)?;
+                0
             }
+        };
+
+        match options.print_children {
+            PrintChildren::No => (),
+            PrintChildren::Yes => {
+                print_nodes(node.children.clone(), arena, buf, indent + 1, options)?
+            }
+        }
+
+        for _ in 0..add_empty_line {
+            maybe_empty_line(buf, idx)?;
         }
     }
     Ok(())
@@ -416,7 +438,7 @@ struct LineToken {
     kind: LineKind,
 }
 
-fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Task {
+fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>, arena: &mut Vec<Node>) -> NodeId {
     let token = it.next().unwrap();
     let (without_tags, tags) = tag::extract_tags(token.text);
 
@@ -425,16 +447,25 @@ fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Task {
         _ => None,
     };
 
-    Task {
-        line_index: Some(token.line_index),
-        // Also trim the leading '- '
-        text: without_tags.trim()[1..].trim_start().to_string(),
-        tags,
-        note,
-    }
+    let node_id = NodeId(arena.len());
+    arena.push(Node {
+        parent: None,
+        children: Vec::new(),
+        item: Item::Task(Task {
+            line_index: Some(token.line_index),
+            // Also trim the leading '- '
+            text: without_tags.trim()[1..].trim_start().to_string(),
+            tags,
+            note,
+        }),
+    });
+    node_id
 }
 
-fn parse_project(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Project {
+fn parse_project(
+    it: &mut Peekable<impl Iterator<Item = LineToken>>,
+    arena: &mut Vec<Node>,
+) -> NodeId {
     let token = it.next().unwrap();
     let (without_tags, tags) = tag::extract_tags(token.text);
     let without_tags = without_tags.trim();
@@ -444,22 +475,30 @@ fn parse_project(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Project 
         _ => None,
     };
 
-    let mut children = vec![];
+    let node_id = NodeId(arena.len());
+    arena.push(Node {
+        parent: None,
+        children: Vec::new(),
+        item: Item::Project(Project {
+            line_index: Some(token.line_index),
+            // Also trim the trailing ':'
+            text: without_tags[..without_tags.len() - 1].to_string(),
+            note,
+            tags,
+        }),
+    });
+
+    let mut children = Vec::new();
     while let Some(nt) = it.peek() {
         if nt.indent <= token.indent {
             break;
         }
-        children.push(parse_item(it));
+        let child_node = parse_item(it, arena);
+        arena[child_node.0].parent = Some(node_id.clone());
+        children.push(child_node);
     }
-
-    Project {
-        line_index: Some(token.line_index),
-        // Also trim the trailing ':'
-        text: without_tags[..without_tags.len() - 1].to_string(),
-        note,
-        tags,
-        children,
-    }
+    arena[node_id.0].children = children;
+    node_id
 }
 
 fn parse_note(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Note {
@@ -478,27 +517,42 @@ fn parse_note(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Note {
     }
 }
 
-fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Item {
+fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>, arena: &mut Vec<Node>) -> NodeId {
     let token = it.peek().unwrap();
     match token.kind {
-        LineKind::Task => Item::Task(parse_task(it)),
-        LineKind::Project => Item::Project(parse_project(it)),
+        LineKind::Task => parse_task(it, arena),
+        LineKind::Project => parse_project(it, arena),
+        // TODO(sirver): This must absolutely not panic.
         LineKind::Note => panic!("Notes only supported as first children of tasks and projects."),
     }
 }
 
 #[derive(Debug)]
 pub struct TaskpaperFile {
-    pub items: Vec<Item>,
+    arena: Vec<Node>,
+    nodes: Vec<NodeId>,
 
     /// If this was loaded from a file, this will be set to the path of that file.
     path: Option<PathBuf>,
 }
 
+#[derive(Clone, Copy)]
+pub enum Position {
+    AsFirst,
+    AsLast,
+}
+
+#[derive(Clone, Copy)]
+pub enum Level<'a> {
+    Top,
+    Under(&'a NodeId),
+}
+
 impl TaskpaperFile {
     pub fn new() -> Self {
         TaskpaperFile {
-            items: Vec::new(),
+            arena: Vec::new(),
+            nodes: Vec::new(),
             path: None,
         }
     }
@@ -523,20 +577,54 @@ impl TaskpaperFile {
                 text: line.trim().to_string(),
             });
 
-        let mut items = Vec::new();
+        let mut nodes = Vec::new();
+        let mut arena = Vec::new();
+
         let mut it = lines.into_iter().peekable();
         while let Some(_) = it.peek() {
-            items.push(parse_item(&mut it));
+            nodes.push(parse_item(&mut it, &mut arena));
         }
-        Ok(TaskpaperFile { items, path: None })
+        Ok(TaskpaperFile {
+            arena,
+            nodes,
+            path: None,
+        })
     }
 
-    pub fn push_back(&mut self, item: Item) {
-        self.items.push(sanitize(item));
+    fn register_item(&mut self, item: Item) -> NodeId {
+        self.arena.push(Node {
+            parent: None,
+            children: Vec::new(),
+            item: sanitize(item),
+        });
+        NodeId(self.arena.len() - 1)
     }
 
-    pub fn push_front(&mut self, item: Item) {
-        self.items.insert(0, sanitize(item));
+    pub fn sort_nodes_by_key<K, F>(&mut self, mut f: F)
+    where
+        F: FnMut(&Node) -> K,
+        K: Ord,
+    {
+        let mut nodes = mem::replace(&mut self.nodes, Vec::new());
+        nodes.sort_by_key(|id| f(&self.arena[id.0]));
+        self.nodes = nodes;
+    }
+
+    pub fn insert(&mut self, item: Item, level: Level, position: Position) -> NodeId {
+        let node_id = self.register_item(item);
+        self.insert_node(node_id.clone(), level, position);
+        node_id
+    }
+
+    pub fn insert_node(&mut self, node_id: NodeId, level: Level, position: Position) {
+        let vec = match level {
+            Level::Top => &mut self.nodes,
+            Level::Under(id) => &mut self.arena[id.0].children,
+        };
+        match position {
+            Position::AsFirst => vec.insert(0, node_id.clone()),
+            Position::AsLast => vec.push(node_id.clone()),
+        }
     }
 
     pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {
@@ -553,67 +641,44 @@ impl TaskpaperFile {
         Ok(())
     }
 
-    /// Return all objects that match 'query'.
-    pub fn search(&self, query: &str) -> Result<Vec<&Item>> {
-        fn recurse<'a>(item: &'a Item, expr: &search::Expr, out: &mut Vec<&'a Item>) {
-            match item {
-                Item::Task(task) => {
-                    if expr.evaluate(&task.tags).is_truish() {
-                        out.push(item);
-                    }
-                }
-                Item::Project(project) => {
-                    if expr.evaluate(&project.tags).is_truish() {
-                        out.push(item);
-                    }
-                    for e in &project.children {
-                        recurse(e, expr, out);
-                    }
-                }
-            }
-        }
-
+    /// Return all objects that match 'query' in order of appearance in the file.
+    pub fn search(&self, query: &str) -> Result<Vec<NodeId>> {
         let expr = search::Expr::parse(query)?;
         let mut out = Vec::new();
-        for e in &self.items {
-            recurse(e, &expr, &mut out);
+        for node in self {
+            let tags = match node.item() {
+                Item::Task(task) => &task.tags,
+                Item::Project(project) => &project.tags,
+            };
+            if expr.evaluate(tags).is_truish() {
+                out.push(node.id().clone());
+            }
         }
         Ok(out)
     }
 
-    /// Find all items with exactly the given text.
-    pub fn get_items(&self, text: &str) -> Vec<&Item> {
-        let mut result = Vec::new();
-        self.map(|e| {
-            if e.text() == text {
-                result.push(e as &Item);
-            }
-        });
-        result
-    }
-
     /// Removes all items from 'self' that match 'query' and return them in the returned value.
     /// If a parent item matches, the children are not tested further.
-    pub fn filter(&mut self, query: &str) -> Result<Vec<Item>> {
-        fn recurse(items: Vec<Item>, expr: &search::Expr, filtered: &mut Vec<Item>) -> Vec<Item> {
+    pub fn filter(&mut self, query: &str) -> Result<Vec<NodeId>> {
+        fn recurse(
+            arena: &mut [Node],
+            node_ids: Vec<NodeId>,
+            expr: &search::Expr,
+            filtered: &mut Vec<NodeId>,
+        ) -> Vec<NodeId> {
             let mut retained = Vec::new();
-            for e in items {
-                match e {
-                    Item::Task(t) => {
-                        if expr.evaluate(&t.tags).is_truish() {
-                            filtered.push(Item::Task(t));
-                        } else {
-                            retained.push(Item::Task(t));
-                        }
-                    }
-                    Item::Project(mut p) => {
-                        if expr.evaluate(&p.tags).is_truish() {
-                            filtered.push(Item::Project(p));
-                        } else {
-                            p.children = recurse(p.children, expr, filtered);
-                            retained.push(Item::Project(p));
-                        }
-                    }
+            for node_id in node_ids {
+                let tags = match arena[node_id.0].item() {
+                    Item::Task(t) => &t.tags,
+                    Item::Project(p) => &p.tags,
+                };
+
+                if expr.evaluate(&tags).is_truish() {
+                    filtered.push(node_id);
+                } else {
+                    retained.push(node_id.clone());
+                    let children = mem::replace(&mut arena[node_id.0].children, Vec::new());
+                    arena[node_id.0].children = recurse(arena, children, expr, filtered);
                 }
             }
             retained
@@ -621,69 +686,185 @@ impl TaskpaperFile {
 
         let expr = search::Expr::parse(query)?;
         let mut filtered = Vec::new();
-        let mut items = Vec::new();
-        ::std::mem::swap(&mut self.items, &mut items);
-        self.items = recurse(items, &expr, &mut filtered);
+        let nodes = mem::replace(&mut self.nodes, Vec::new());
+        self.nodes = recurse(&mut self.arena, nodes, &expr, &mut filtered);
         Ok(filtered)
     }
 
-    /// Finds the first project with the given name.
-    pub fn get_project_mut(&mut self, text: &str) -> Option<&mut Project> {
-        fn recurse<'a>(item: &'a mut Item, text: &str) -> Option<&'a mut Project> {
-            match item {
-                Item::Project(project) => {
-                    if project.text == text {
-                        return Some(project);
-                    }
-                    for e in &mut project.children {
-                        if let Some(project) = recurse(e, text) {
-                            return Some(project);
-                        }
-                    }
-                }
-                Item::Task(_) => (),
-            };
-            None
-        }
-
-        for e in &mut self.items {
-            if let Some(child) = recurse(e, text) {
-                return Some(child);
+    /// Copy the node with 'source_id' from 'source' into us, including its entry and all sub
+    /// nodes. Does not link it into the file tree, this needs to be done later manually.
+    pub fn copy_node(&mut self, source: &TaskpaperFile, source_id: &NodeId) -> NodeId {
+        fn recurse(arena: &mut Vec<Node>, source: &TaskpaperFile, source_id: &NodeId) -> NodeId {
+            let id = NodeId(arena.len());
+            let source_node = &source.arena[source_id.0];
+            arena.push(Node {
+                parent: None,
+                item: source_node.item().clone(),
+                children: Vec::new(),
+            });
+            let mut children = Vec::with_capacity(source_node.children.len());
+            for child_id in &source_node.children {
+                children.push(recurse(arena, source, child_id));
             }
+            arena[id.0].children = children;
+            id
         }
-        None
+        recurse(&mut self.arena, source, source_id)
     }
 
-    /// Call `f` on all items in this file in order of appearance in the file, including all
-    /// children of projects.
-    pub fn map_mut(&mut self, mut f: impl Fn(&mut Item)) {
-        fn recurse(items: &mut [Item], f: &mut impl FnMut(&mut Item)) {
-            for e in items.iter_mut() {
-                f(e);
-                match e {
-                    Item::Project(ref mut p) => {
-                        recurse(&mut p.children, f);
-                    }
-                    _ => (),
-                }
-            }
+    pub fn iter(&self) -> TaskpaperIter {
+        TaskpaperIter {
+            tpf: self,
+            open: self.nodes.iter().cloned().collect(),
         }
-        recurse(&mut self.items, &mut f);
     }
 
-    pub fn map<'a>(&'a self, mut f: impl FnMut(&'a Item)) {
-        fn recurse<'b>(items: &'b [Item], f: &mut impl FnMut(&'b Item)) {
-            for e in items.iter() {
-                f(e);
-                match e {
-                    Item::Project(ref p) => {
-                        recurse(&p.children, f);
-                    }
-                    _ => (),
-                }
-            }
+    pub fn iter_mut(&mut self) -> TaskpaperIterMut {
+        let open = self.nodes.iter().cloned().collect();
+        TaskpaperIterMut { tpf: self, open }
+    }
+
+    /// Removes the node with the given 'node_id' from the File, i.e. unlinks it from its parent.
+    pub fn unlink_node(&mut self, node_id: NodeId) {
+        if self.arena[node_id.0].parent().is_some() {
+            let parent_id = self.arena[node_id.0].parent().unwrap().0;
+            let parent_node = &mut self.arena[parent_id];
+            let pos = parent_node
+                .children
+                .iter()
+                .position(|x| x.0 == node_id.0)
+                .expect("The parent of a node does not have this node as child.");
+            parent_node.children.remove(pos);
+        } else {
+            let pos = self
+                .nodes
+                .iter()
+                .position(|x| x.0 == node_id.0)
+                .expect("The parent of a node does not have this node as child.");
+            self.nodes.remove(pos);
         }
-        recurse(&self.items, &mut f);
+        self.arena[node_id.0].parent = None;
+    }
+}
+
+impl<'a> Index<&'a NodeId> for TaskpaperFile {
+    type Output = Node;
+
+    fn index(&self, node_id: &'a NodeId) -> &Self::Output {
+        &self.arena[node_id.0]
+    }
+}
+
+impl<'a> IndexMut<&'a NodeId> for TaskpaperFile {
+    fn index_mut(&mut self, node_id: &'a NodeId) -> &mut Self::Output {
+        &mut self.arena[node_id.0]
+    }
+}
+
+// TODO(sirver): IterItem and IterItemMut seem unnecessary, they are essentially Nodes.
+#[derive(Debug)]
+pub struct IterItem<'a> {
+    node: &'a Node,
+    node_id: NodeId,
+}
+
+impl<'a> IterItem<'a> {
+    pub fn item(&'a self) -> &'a Item {
+        &self.node.item
+    }
+
+    pub fn id(&self) -> &NodeId {
+        &self.node_id
+    }
+}
+
+pub struct TaskpaperIter<'a> {
+    tpf: &'a TaskpaperFile,
+    open: VecDeque<NodeId>,
+}
+
+impl<'a> Iterator for TaskpaperIter<'a> {
+    type Item = IterItem<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let node_id = match self.open.pop_front() {
+            None => return None,
+            Some(id) => id,
+        };
+        let node = &self.tpf.arena[node_id.0];
+        for child_id in node.children.iter().rev() {
+            self.open.push_front(child_id.clone());
+        }
+        Some(IterItem { node, node_id })
+    }
+}
+
+impl<'a> IntoIterator for &'a TaskpaperFile {
+    type IntoIter = TaskpaperIter<'a>;
+    type Item = IterItem<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+#[derive(Debug)]
+pub struct IterMutItem {
+    node: *mut Node,
+    node_id: NodeId,
+}
+
+impl IterMutItem {
+    pub fn item_mut(&mut self) -> &mut Item {
+        // Safe by construction:
+        // The iterator holds a ref onto the TaskpaperFile, which makes it illegal
+        // to add new items - this guarantees that this pointer is still valid while
+        // the iterator is alive.
+        // IterMutItem guards the mutability of the underlying node: The topology of the file
+        // cannot be changed, but the Item it is pointing to can be freely be modified without
+        // actually changing the TaskpaperFileStruct.
+        unsafe { &mut (*self.node).item }
+    }
+
+    pub fn item(&self) -> &Item {
+        // See 'item_mut'.
+        unsafe { &(*self.node).item }
+    }
+
+    pub fn id(&self) -> &NodeId {
+        &self.node_id
+    }
+}
+
+pub struct TaskpaperIterMut<'a> {
+    tpf: &'a mut TaskpaperFile,
+    open: VecDeque<NodeId>,
+}
+
+impl<'a> Iterator for TaskpaperIterMut<'a> {
+    type Item = IterMutItem;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let node_id = match self.open.pop_front() {
+            None => return None,
+            Some(node_id) => node_id,
+        };
+        for child_id in self.tpf.arena[node_id.0].children.iter().rev() {
+            self.open.push_front(child_id.clone());
+        }
+        Some(IterMutItem {
+            node: &mut self.tpf.arena[node_id.0],
+            node_id,
+        })
+    }
+}
+
+impl<'a> IntoIterator for &'a mut TaskpaperFile {
+    type Item = IterMutItem;
+    type IntoIter = TaskpaperIterMut<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
     }
 }
 
@@ -694,10 +875,7 @@ impl ToStringWithIndent for TaskpaperFile {
         indent: usize,
         options: FormatOptions,
     ) -> fmt::Result {
-        let items: Vec<&Item> = self.items.iter().collect();
-        &items.append_to_string(buf, indent, options)?;
-
-        Ok(())
+        print_nodes(self.nodes.clone(), &self.arena, buf, indent, options)
     }
 }
 
@@ -716,30 +894,32 @@ pub fn mirror_changes(
     }
 
     let source = TaskpaperFile::parse_file(source_path)?;
-    destination.map_mut(|e| {
-        let items = source.get_items(e.text());
-        if items.is_empty() {
-            return;
-        }
+    for mut dest_node in destination {
+        for source_node in &source {
+            if source_node.item().text() != dest_node.item().text() {
+                continue;
+            }
 
-        match (&items[0], e) {
-            (Item::Project(s), Item::Project(d)) => {
-                d.text = s.text.clone();
-                d.tags = s.tags.clone();
-                if s.note.is_some() {
-                    d.note = s.note.clone();
+            match (&source_node.item(), dest_node.item_mut()) {
+                (Item::Project(s), Item::Project(d)) => {
+                    d.text = s.text.clone();
+                    d.tags = s.tags.clone();
+                    if s.note.is_some() {
+                        d.note = s.note.clone();
+                    }
                 }
-            }
-            (Item::Task(s), Item::Task(d)) => {
-                d.text = s.text.clone();
-                d.tags = s.tags.clone();
-                if s.note.is_some() {
-                    d.note = s.note.clone();
+                (Item::Task(s), Item::Task(d)) => {
+                    d.text = s.text.clone();
+                    d.tags = s.tags.clone();
+                    if s.note.is_some() {
+                        d.note = s.note.clone();
+                    }
                 }
-            }
-            _ => (),
-        };
-    });
+                _ => (),
+            };
+            break; // We only use the first matching item.
+        }
+    }
 
     Ok(())
 }
@@ -771,7 +951,8 @@ mod tests {
             note: None,
         })];
         let output = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(golden, output.items);
+        let items: Vec<Item> = output.iter().map(|n| n.item().clone()).collect();
+        assert_eq!(golden, items);
     }
 
     #[test]
@@ -803,7 +984,8 @@ mod tests {
             note: None,
         })];
         let output = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(golden, output.items);
+        let items: Vec<Item> = output.iter().map(|n| n.item().clone()).collect();
+        assert_eq!(golden, items);
     }
 
     #[test]

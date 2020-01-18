@@ -3,7 +3,7 @@ function is_rust(p)
    return p:ext() == "rs" or p:ext() == "toml"
 end
 
-PACKAGE="--all"
+PACKAGE="-p taskpaper -p taskpaper_cli"
 
 return {
    {
@@ -26,6 +26,18 @@ return {
             name = "Running cargo clippy",
             command = "cargo clippy " .. PACKAGE .. " --color=always",
          },
+      }
+   },
+   {
+      should_run = is_rust,
+      redirect_stderr = "/dev/null",
+      redirect_stdout = "/dev/null",
+      commands = {
+         {
+            name = "Rusty tags",
+            command = "rusty-tags vi",
+         },
+
       }
    },
 }
