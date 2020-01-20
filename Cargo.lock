@@ -2534,7 +2534,7 @@ dependencies = [
 
 [[package]]
 name = "taskpaper"
-version = "0.18.1"
+version = "0.18.2"
 dependencies = [
  "path-absolutize 1.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2546,7 +2546,7 @@ dependencies = [
 
 [[package]]
 name = "taskpaper_cli"
-version = "0.18.1"
+version = "0.18.2"
 dependencies = [
  "base64 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2567,7 +2567,7 @@ dependencies = [
  "soup 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "syndication 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "taskpaper 0.18.1",
+ "taskpaper 0.18.2",
  "textwrap 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.0-alpha.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",

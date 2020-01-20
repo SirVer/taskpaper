@@ -391,7 +391,7 @@ fn parse_item<'a>(
     let indent = find_indent(line);
     loop {
         match it.peek() {
-            Some((_, next_line)) if find_indent(next_line) >= indent => break,
+            Some((_, next_line)) if find_indent(next_line) <= indent => break,
             None => break,
             Some(_) => (),
         }
