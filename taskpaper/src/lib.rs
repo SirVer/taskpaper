@@ -9,6 +9,7 @@ pub mod testing;
 pub use crate::tag::{Tag, Tags};
 pub use db::{CommonFileKind, Database};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::fmt::{self, Write};
 use std::io;
@@ -38,6 +39,10 @@ impl Node {
 
     pub fn parent(&self) -> Option<&NodeId> {
         self.parent.as_ref()
+    }
+
+    pub fn children(&self) -> &[NodeId] {
+        &self.children
     }
 }
 
@@ -70,64 +75,23 @@ impl Error {
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
-fn sanitize(item: Item) -> Item {
+// TODO(sirver): If the text is multiple lines, this should be split into multiple sibling items.
+// In the end, the invariant should hold that index of line == NodeId right after parsing.
+// TODO(sirver): This also could leave empty lines.
+fn sanitize(item: &mut Item) {
     // Make sure the line does not contain a newline and does not end with ':'
-    fn sanitize_note(s: Option<String>) -> Option<String> {
-        match s {
-            None => None,
-            Some(s) => {
-                let t = s
-                    .split("\n")
-                    .map(|l| l.trim_end().trim_end_matches(':'))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-                    .trim()
-                    .to_string();
-                if t.is_empty() {
-                    None
-                } else {
-                    Some(t)
-                }
-            }
-        }
-    }
-
-    // Make sure none of the note texts end with ':'.
-    fn sanitize_text(s: String) -> String {
-        s.replace('\n', " ").trim_end_matches(':').to_string()
-    }
-
-    match item {
-        Item::Task(t) => Item::Task(Task {
-            tags: t.tags,
-            text: sanitize_text(t.text),
-            note: sanitize_note(t.note),
-            line_index: t.line_index,
-        }),
-        Item::Project(p) => {
-            let note = match p.note {
-                None => None,
-                Some(n) => {
-                    let new_text = sanitize_note(Some(n.text));
-                    new_text.map(|text| Note { text })
-                }
-            };
-            Item::Project(Project {
-                line_index: p.line_index,
-                text: sanitize_text(p.text),
-                note,
-                tags: p.tags,
-            })
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Project {
-    pub line_index: Option<usize>,
-    pub text: String,
-    pub note: Option<Note>,
-    pub tags: Tags,
+    let mut text = item
+        .text
+        .split("\n")
+        .map(|l| l.trim_end().trim_end_matches(':'))
+        // TODO(sirver): this is not very accurate: if text is indended, we'd still want to remove
+        // '- ' at the beginning of the content, but this is not happening here.
+        .map(|l| l.trim_end().trim_start_matches("- "))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string();
+    ::std::mem::swap(&mut item.text, &mut text);
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -184,166 +148,113 @@ impl Default for FormatOptions {
     }
 }
 
-impl ToStringWithIndent for Project {
-    fn append_to_string(
-        &self,
-        buf: &mut String,
-        indent: usize,
-        options: FormatOptions,
-    ) -> fmt::Result {
-        let indent_str = "\t".repeat(indent);
-        let mut tags = self.tags.iter().map(|t| t.to_string()).collect::<Vec<_>>();
-        tags.sort();
-        let tags_string = if tags.is_empty() {
-            "".to_string()
-        } else {
-            format!(" {}", tags.join(" "))
-        };
-        writeln!(buf, "{}{}:{}", indent_str, self.text, tags_string)?;
+fn append_project_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::Result {
+    let indent_str = "\t".repeat(indent);
+    let mut tags = item.tags.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+    tags.sort();
+    let tags_string = if tags.is_empty() {
+        "".to_string()
+    } else {
+        format!(" {}", tags.join(" "))
+    };
+    writeln!(buf, "{}{}:{}", indent_str, item.text, tags_string)?;
 
-        match options.print_notes {
-            PrintNotes::No => (),
-            PrintNotes::Yes => {
-                if let Some(note) = &self.note {
-                    let note_indent = "\t".repeat(indent + 1);
-                    for line in note.text.split_terminator('\n') {
-                        writeln!(buf, "{}{}", note_indent, line)?;
-                    }
-                }
-            }
-        }
+    Ok(())
+}
 
-        Ok(())
+fn append_note_to_string(
+    item: &Item,
+    buf: &mut String,
+    indent: usize,
+    options: FormatOptions,
+) -> fmt::Result {
+    match options.print_notes {
+        PrintNotes::No => return Ok(()),
+        PrintNotes::Yes => (),
     }
+
+    let indent = "\t".repeat(indent);
+    for line in item.text.split_terminator('\n') {
+        writeln!(buf, "{}{}", indent, line)?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Task {
-    pub tags: Tags,
+pub enum ItemKind {
+    Project,
+    Task,
+    Note,
+}
+
+// TODO(sirver): The goal should be to keep the contents of files unchanged as much as possible.
+// The current layout of the Item struct does not make this possible.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Item {
+    // TODO(sirver): need to add indent level here, since indent(c) >= indent(p) + 1.
+    pub kind: ItemKind,
+
+    /// The text of this item with any tags stripped.
     pub text: String,
-    // TODO(sirver): Consider to use Note here instead of String.
-    pub note: Option<String>,
+
+    /// The collection of Tags that this item contains. Order of the tags is currently lost,
+    /// they will be reordered on write.
+    pub tags: Tags,
     pub line_index: Option<usize>,
 }
 
-pub trait ToStringWithIndent {
-    fn append_to_string(
-        &self,
-        buf: &mut String,
-        indent: usize,
-        options: FormatOptions,
-    ) -> fmt::Result;
-
-    fn to_string(&self, indent: usize, options: FormatOptions) -> String {
-        let mut s = String::new();
-        self.append_to_string(&mut s, indent, options).unwrap();
-        s
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Note {
-    pub text: String,
-}
-
-impl ToStringWithIndent for Note {
-    fn append_to_string(&self, buf: &mut String, indent: usize, _: FormatOptions) -> fmt::Result {
-        let indent = "\t".repeat(indent);
-        for line in self.text.split_terminator('\n') {
-            writeln!(buf, "{}{}", indent, line)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Item {
-    Task(Task),
-    Project(Project),
-}
-
 impl Item {
+    pub fn is_task(&self) -> bool {
+        match &self.kind {
+            ItemKind::Task => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_note(&self) -> bool {
+        match &self.kind {
+            ItemKind::Note => true,
+            _ => false,
+        }
+    }
+
     pub fn is_project(&self) -> bool {
-        match *self {
-            Item::Project(_) => true,
+        match &self.kind {
+            ItemKind::Project => true,
             _ => false,
         }
     }
 
     pub fn line_index(&self) -> Option<usize> {
-        match self {
-            Item::Project(p) => p.line_index,
-            Item::Task(t) => t.line_index,
-        }
+        // TODO(sirver): return by ref
+        self.line_index.clone()
     }
 
     pub fn text(&self) -> &str {
-        match self {
-            Item::Project(p) => &p.text,
-            Item::Task(t) => &t.text,
-        }
+        &self.text
     }
 
     pub fn tags(&self) -> &Tags {
-        match self {
-            Item::Project(p) => &p.tags,
-            Item::Task(t) => &t.tags,
-        }
+        &self.tags
     }
 
     pub fn tags_mut(&mut self) -> &mut Tags {
-        match self {
-            Item::Project(p) => &mut p.tags,
-            Item::Task(t) => &mut t.tags,
-        }
+        &mut self.tags
     }
 }
 
-impl ToStringWithIndent for Item {
-    fn append_to_string(
-        &self,
-        buf: &mut String,
-        indent: usize,
-        options: FormatOptions,
-    ) -> fmt::Result {
-        match self {
-            Item::Task(t) => t.append_to_string(buf, indent, options),
-            Item::Project(p) => p.append_to_string(buf, indent, options),
-        }
-    }
-}
-
-impl ToStringWithIndent for Task {
-    fn append_to_string(
-        &self,
-        buf: &mut String,
-        indent: usize,
-        options: FormatOptions,
-    ) -> fmt::Result {
-        let indent_str = "\t".repeat(indent);
-        let mut tags = self.tags.iter().collect::<Vec<Tag>>();
-        tags.sort_by_key(|t| (t.value.is_some(), t.name.clone()));
-        let tags_string = if tags.is_empty() {
-            "".to_string()
-        } else {
-            let tag_strings = tags.iter().map(|t| t.to_string()).collect::<Vec<String>>();
-            format!(" {}", tag_strings.join(" "))
-        };
-        writeln!(buf, "{}- {}{}", indent_str, self.text, tags_string)?;
-
-        match options.print_notes {
-            PrintNotes::No => (),
-            PrintNotes::Yes => {
-                if let Some(note) = &self.note {
-                    let note_indent = "\t".repeat(indent + 1);
-                    for line in note.split_terminator('\n') {
-                        writeln!(buf, "{}{}", note_indent, line)?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
+fn append_task_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::Result {
+    let indent_str = "\t".repeat(indent);
+    let mut tags = item.tags.iter().collect::<Vec<Tag>>();
+    tags.sort_by_key(|t| (t.value.is_some(), t.name.clone()));
+    let tags_string = if tags.is_empty() {
+        "".to_string()
+    } else {
+        let tag_strings = tags.iter().map(|t| t.to_string()).collect::<Vec<String>>();
+        format!(" {}", tag_strings.join(" "))
+    };
+    writeln!(buf, "{}- {}{}", indent_str, item.text, tags_string)?;
+    Ok(())
 }
 
 fn print_nodes(
@@ -371,17 +282,21 @@ fn print_nodes(
 
     for (idx, id) in node_ids.iter().enumerate() {
         let node = &arena[id.0];
-        let add_empty_line = match &node.item {
-            Item::Project(p) => {
-                p.append_to_string(buf, indent, options)?;
+        let add_empty_line = match &node.item.kind {
+            ItemKind::Project => {
+                append_project_to_string(&node.item, buf, indent)?;
                 match indent {
                     0 => options.empty_line_after_project.top_level,
                     1 => options.empty_line_after_project.first_level,
                     _ => options.empty_line_after_project.others,
                 }
             }
-            Item::Task(t) => {
-                t.append_to_string(buf, indent, options)?;
+            ItemKind::Task => {
+                append_task_to_string(&node.item, buf, indent)?;
+                0
+            }
+            ItemKind::Note => {
+                append_note_to_string(&node.item, buf, indent, options)?;
                 0
             }
         };
@@ -400,6 +315,8 @@ fn print_nodes(
     Ok(())
 }
 
+// This is the same as ItemKind at the moment, but I believe dealing with empty lines is easier if
+// this is kept separate.
 #[derive(Debug, PartialEq)]
 enum LineKind {
     Task,
@@ -438,55 +355,43 @@ struct LineToken {
     kind: LineKind,
 }
 
-fn parse_task(it: &mut Peekable<impl Iterator<Item = LineToken>>, arena: &mut Vec<Node>) -> NodeId {
-    let token = it.next().unwrap();
-    let (without_tags, tags) = tag::extract_tags(token.text);
-
-    let note = match it.peek() {
-        Some(nt) if nt.kind == LineKind::Note => Some(parse_note(it).text),
-        _ => None,
-    };
-
-    let node_id = NodeId(arena.len());
-    arena.push(Node {
-        parent: None,
-        children: Vec::new(),
-        item: Item::Task(Task {
-            line_index: Some(token.line_index),
-            // Also trim the leading '- '
-            text: without_tags.trim()[1..].trim_start().to_string(),
-            tags,
-            note,
-        }),
-    });
-    node_id
+fn parse_task_text(line_without_tags: &str) -> String {
+    // Trim the leading '- '
+    line_without_tags.trim()[1..].trim_start().to_string()
 }
 
-fn parse_project(
-    it: &mut Peekable<impl Iterator<Item = LineToken>>,
-    arena: &mut Vec<Node>,
-) -> NodeId {
+fn parse_project_text(line_without_tags: &str) -> String {
+    let without_tags = line_without_tags.trim();
+    // Trim the trailing ':'
+    without_tags[..without_tags.len() - 1].to_string()
+}
+
+fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>, arena: &mut Vec<Node>) -> NodeId {
     let token = it.next().unwrap();
+
     let (without_tags, tags) = tag::extract_tags(token.text);
     let without_tags = without_tags.trim();
 
-    let note = match it.peek() {
-        Some(nt) if nt.kind == LineKind::Note => Some(parse_note(it)),
-        _ => None,
+    let (kind, text): (_, Cow<str>) = match token.kind {
+        LineKind::Task => (ItemKind::Task, Cow::Owned(parse_task_text(&without_tags))),
+        LineKind::Project => (
+            ItemKind::Project,
+            Cow::Owned(parse_project_text(&without_tags)),
+        ),
+        LineKind::Note => (ItemKind::Note, Cow::Borrowed(without_tags)),
     };
 
-    let node_id = NodeId(arena.len());
     arena.push(Node {
         parent: None,
         children: Vec::new(),
-        item: Item::Project(Project {
-            line_index: Some(token.line_index),
-            // Also trim the trailing ':'
-            text: without_tags[..without_tags.len() - 1].to_string(),
-            note,
+        item: Item {
+            kind,
+            text: text.to_string(),
             tags,
-        }),
+            line_index: Some(token.line_index),
+        },
     });
+    let node_id = NodeId(arena.len() - 1);
 
     let mut children = Vec::new();
     while let Some(nt) = it.peek() {
@@ -498,33 +403,8 @@ fn parse_project(
         children.push(child_node);
     }
     arena[node_id.0].children = children;
+
     node_id
-}
-
-fn parse_note(it: &mut Peekable<impl Iterator<Item = LineToken>>) -> Note {
-    let mut text = vec![];
-    let first_indent = it.peek().unwrap().indent;
-    while let Some(nt) = it.peek() {
-        if nt.kind != LineKind::Note || nt.indent < first_indent {
-            break;
-        }
-        let nt = it.next().unwrap();
-        let indent = "\t".repeat(nt.indent - first_indent);
-        text.push(format!("{}{}", indent, nt.text));
-    }
-    Note {
-        text: text.join("\n"),
-    }
-}
-
-fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>, arena: &mut Vec<Node>) -> NodeId {
-    let token = it.peek().unwrap();
-    match token.kind {
-        LineKind::Task => parse_task(it, arena),
-        LineKind::Project => parse_project(it, arena),
-        // TODO(sirver): This must absolutely not panic.
-        LineKind::Note => panic!("Notes only supported as first children of tasks and projects."),
-    }
 }
 
 #[derive(Debug)]
@@ -565,6 +445,10 @@ impl TaskpaperFile {
     }
 
     pub fn parse(input: &str) -> Result<Self> {
+        // TODO(sirver): We pay a lot here: we allocate for every line, and we
+        // run extract_tags twice on every line. Change this so that we read the whole file,
+        // split it on '\n' and iterate over the slices and then do extract tags & classify on
+        // every line only once.
         let lines = input
             .trim()
             .lines()
@@ -591,11 +475,12 @@ impl TaskpaperFile {
         })
     }
 
-    fn register_item(&mut self, item: Item) -> NodeId {
+    fn register_item(&mut self, mut item: Item) -> NodeId {
+        sanitize(&mut item);
         self.arena.push(Node {
             parent: None,
             children: Vec::new(),
-            item: sanitize(item),
+            item,
         });
         NodeId(self.arena.len() - 1)
     }
@@ -627,8 +512,22 @@ impl TaskpaperFile {
         }
     }
 
+    pub fn to_string(&self, options: FormatOptions) -> String {
+        let mut buf = String::new();
+        print_nodes(self.nodes.clone(), &self.arena, &mut buf, 0, options)
+            .expect("Formatting should never fail.");
+        buf
+    }
+
+    pub fn node_to_string(&self, node_id: &NodeId, options: FormatOptions) -> String {
+        let mut buf = String::new();
+        print_nodes(vec![node_id.clone()], &self.arena, &mut buf, 0, options)
+            .expect("Formatting should never fail.");
+        buf
+    }
+
     pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {
-        let new = self.to_string(0, options);
+        let new = self.to_string(options);
 
         let has_changed = match std::fs::read_to_string(&path) {
             Err(_) => true,
@@ -646,11 +545,7 @@ impl TaskpaperFile {
         let expr = search::Expr::parse(query)?;
         let mut out = Vec::new();
         for node in self {
-            let tags = match node.item() {
-                Item::Task(task) => &task.tags,
-                Item::Project(project) => &project.tags,
-            };
-            if expr.evaluate(tags).is_truish() {
+            if expr.evaluate(&node.item().tags).is_truish() {
                 out.push(node.id().clone());
             }
         }
@@ -668,12 +563,7 @@ impl TaskpaperFile {
         ) -> Vec<NodeId> {
             let mut retained = Vec::new();
             for node_id in node_ids {
-                let tags = match arena[node_id.0].item() {
-                    Item::Task(t) => &t.tags,
-                    Item::Project(p) => &p.tags,
-                };
-
-                if expr.evaluate(&tags).is_truish() {
+                if expr.evaluate(&arena[node_id.0].item.tags).is_truish() {
                     filtered.push(node_id);
                 } else {
                     retained.push(node_id.clone());
@@ -721,6 +611,18 @@ impl TaskpaperFile {
 
     pub fn iter_mut(&mut self) -> TaskpaperIterMut {
         let open = self.nodes.iter().cloned().collect();
+        TaskpaperIterMut { tpf: self, open }
+    }
+
+    pub fn iter_node(&self, node_id: &NodeId) -> TaskpaperIter {
+        let mut open = VecDeque::new();
+        open.push_back(node_id.clone());
+        TaskpaperIter { tpf: self, open }
+    }
+
+    pub fn iter_node_mut(&mut self, node_id: &NodeId) -> TaskpaperIterMut {
+        let mut open = VecDeque::new();
+        open.push_back(node_id.clone());
         TaskpaperIterMut { tpf: self, open }
     }
 
@@ -868,17 +770,8 @@ impl<'a> IntoIterator for &'a mut TaskpaperFile {
     }
 }
 
-impl ToStringWithIndent for TaskpaperFile {
-    fn append_to_string(
-        &self,
-        buf: &mut String,
-        indent: usize,
-        options: FormatOptions,
-    ) -> fmt::Result {
-        print_nodes(self.nodes.clone(), &self.arena, buf, indent, options)
-    }
-}
-
+// TODO(sirver): Move this function to taskpaper_cli, since it is fairly specific to my current
+// usecases.
 pub fn mirror_changes(
     source_path: impl AsRef<Path>,
     destination: &mut TaskpaperFile,
@@ -894,30 +787,62 @@ pub fn mirror_changes(
     }
 
     let source = TaskpaperFile::parse_file(source_path)?;
-    for mut dest_node in destination {
-        for source_node in &source {
-            if source_node.item().text() != dest_node.item().text() {
+    let mut pairs = Vec::new();
+
+    for dest_node in destination.iter() {
+        if let Some(source_node) = source
+            .iter()
+            .find(|source_node| source_node.item().text() == dest_node.item().text())
+        {
+            pairs.push((source_node.id().clone(), dest_node.id().clone()));
+        }
+    }
+
+    for (source_id, destination_id) in pairs {
+        // TODO(sirver): This needs reconsideration.
+        // As for its children: we copy over all notes unchanged, but ignore every other
+        // children. This is a tad iffy, because we remove and add children to the 'dest_node'
+        // while we iterate over it. Current implementation behavior is that these changes are
+        // ignored by the iteration (since the children of the current node are pushed to the
+        // open list before the node is visited).
+        let source_node = &source[&source_id];
+        match (
+            &source_node.item().kind,
+            &destination[&destination_id].item().kind,
+        ) {
+            (ItemKind::Project, ItemKind::Project) | (ItemKind::Task, ItemKind::Task) => {
+                // Copy the data of the changed item over.
+                *destination[&destination_id].item_mut() = source_node.item().clone();
+            }
+            _ => continue,
+        };
+
+        if source_node.children().is_empty() {
+            continue;
+        }
+
+        // Unlink all existing Notes from destination.
+        let children_to_nuke = destination[&destination_id]
+            .children
+            .iter()
+            .filter(|id| destination[&id].item().is_note())
+            .cloned()
+            .collect::<Vec<_>>();
+        for child_id in children_to_nuke {
+            destination.unlink_node(child_id);
+        }
+
+        // Copy all notes from other over.
+        for source_child_id in source_node.children() {
+            if !source[source_child_id].item().is_note() {
                 continue;
             }
-
-            match (&source_node.item(), dest_node.item_mut()) {
-                (Item::Project(s), Item::Project(d)) => {
-                    d.text = s.text.clone();
-                    d.tags = s.tags.clone();
-                    if s.note.is_some() {
-                        d.note = s.note.clone();
-                    }
-                }
-                (Item::Task(s), Item::Task(d)) => {
-                    d.text = s.text.clone();
-                    d.tags = s.tags.clone();
-                    if s.note.is_some() {
-                        d.note = s.note.clone();
-                    }
-                }
-                _ => (),
-            };
-            break; // We only use the first matching item.
+            let dest_child_id = destination.copy_node(&source, source_child_id);
+            destination.insert_node(
+                dest_child_id,
+                Level::Under(&destination_id),
+                Position::AsLast,
+            );
         }
     }
 
@@ -933,7 +858,8 @@ mod tests {
     #[test]
     fn test_simple_task_parse() {
         let input = r"- A task @tag1 @tag2";
-        let golden = vec![Item::Task(Task {
+        let golden = vec![Item {
+            kind: ItemKind::Task,
             line_index: Some(0),
             text: "A task".to_string(),
             tags: {
@@ -948,8 +874,7 @@ mod tests {
                 });
                 tags
             },
-            note: None,
-        })];
+        }];
         let output = TaskpaperFile::parse(&input).unwrap();
         let items: Vec<Item> = output.iter().map(|n| n.item().clone()).collect();
         assert_eq!(golden, items);
@@ -958,7 +883,8 @@ mod tests {
     #[test]
     fn test_task_with_mixed_tags_parse() {
         let input = r"- A task @done(2018-08-05) @another(foo bar) @tag1 @tag2";
-        let golden = vec![Item::Task(Task {
+        let golden = vec![Item {
+            kind: ItemKind::Task,
             text: "A task".to_string(),
             line_index: Some(0),
             tags: {
@@ -981,8 +907,7 @@ mod tests {
                 });
                 tags
             },
-            note: None,
-        })];
+        }];
         let output = TaskpaperFile::parse(&input).unwrap();
         let items: Vec<Item> = output.iter().map(|n| n.item().clone()).collect();
         assert_eq!(golden, items);
@@ -992,7 +917,7 @@ mod tests {
     fn test_parsing_roundtrip() {
         let input = include_str!("tests/simple_project_canonical_formatting.taskpaper");
         let tpf = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(input, tpf.to_string(0, FormatOptions::default()));
+        assert_eq!(input, tpf.to_string(FormatOptions::default()));
     }
 
     #[test]
@@ -1000,7 +925,7 @@ mod tests {
         let input = include_str!("tests/simple_project.taskpaper");
         let expected = include_str!("tests/simple_project_canonical_formatting.taskpaper");
         let tpf = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(expected, tpf.to_string(0, FormatOptions::default()));
+        assert_eq!(expected, tpf.to_string(FormatOptions::default()));
     }
 
     #[test]
@@ -1010,7 +935,7 @@ mod tests {
         )
         .unwrap();
         let golden = "- Arbeit • Foo • blah @coding @next @blocked(arg prs) @done(2018-06-21)\n";
-        assert_eq!(golden, tpf.to_string(0, FormatOptions::default()));
+        assert_eq!(golden, tpf.to_string(FormatOptions::default()));
     }
 
     #[test]
@@ -1027,7 +952,7 @@ mod tests {
         let mut destination = TaskpaperFile::parse_file(&destination_path).unwrap();
         mirror_changes(&source, &mut destination).expect("Should work.");
         assert_eq!(
-            &destination.to_string(0, FormatOptions::default()),
+            &destination.to_string(FormatOptions::default()),
             include_str!("tests/mirror_changes/destination.taskpaper"),
         );
     }
@@ -1044,7 +969,7 @@ mod tests {
         );
         mirror_changes(&source, &mut destination).expect("Should work");
         assert_eq!(
-            &destination.to_string(0, FormatOptions::default()),
+            &destination.to_string(FormatOptions::default()),
             include_str!("tests/mirror_changes/destination_golden.taskpaper"),
         );
     }

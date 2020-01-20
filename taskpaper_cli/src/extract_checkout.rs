@@ -22,27 +22,39 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
     ];
 
     for (title, query) in PROJECTS.iter() {
-        let node_ids = todo.search(query)?;
-        if node_ids.is_empty() {
+        let search_results = todo.search(query)?;
+        if search_results.is_empty() {
             continue;
         }
 
         let project_id = checkout.insert(
-            taskpaper::Item::Project(taskpaper::Project {
+            taskpaper::Item {
+                kind: taskpaper::ItemKind::Project,
                 line_index: None,
                 text: title.to_string(),
-                note: None,
                 tags: taskpaper::Tags::new(),
-            }),
+            },
             Level::Top,
             Position::AsLast,
         );
-        for node_id in &node_ids {
-            checkout.insert(
+        for node_id in &search_results {
+            let task_id = checkout.insert(
                 todo[node_id].item().clone(),
                 Level::Under(&project_id),
                 Position::AsLast,
             );
+
+            // Also copy over the notes that are immediate children.
+            for c in todo[node_id].children() {
+                if !todo[&c].item().is_note() {
+                    continue;
+                }
+                checkout.insert(
+                    todo[&c].item().clone(),
+                    Level::Under(&task_id),
+                    Position::AsLast,
+                );
+            }
         }
     }
 

@@ -2,7 +2,7 @@ use crate::ConfigurationFile;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-use taskpaper::{db::Database, Result, TaskpaperFile, ToStringWithIndent};
+use taskpaper::{db::Database, Result, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -83,7 +83,7 @@ pub fn search(
         for node_id in node_ids {
             let item = tpf[node_id].item();
             let line = item.line_index().unwrap() + 1;
-            let text = item.to_string(0, options);
+            let text = tpf.node_to_string(node_id, options);
             print!("{}:{}:{}", path.display(), line, text);
         }
     }

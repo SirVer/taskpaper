@@ -16,12 +16,8 @@ pub fn extract_timeline(
     let mut sorted = BTreeMap::new();
     for node_id in &node_ids {
         let item = todo[node_id].item();
-        let tags = match item {
-            taskpaper::Item::Task(t) => &t.tags,
-            taskpaper::Item::Project(p) => &p.tags,
-        };
 
-        let due = match tags.get("due").unwrap().value {
+        let due = match item.tags().get("due").unwrap().value {
             None => continue,
             Some(v) => v,
         };
@@ -47,17 +43,18 @@ pub fn extract_timeline(
         };
 
         let project_id = timeline.insert(
-            taskpaper::Item::Project(taskpaper::Project {
+            taskpaper::Item {
+                kind: taskpaper::ItemKind::Project,
                 line_index: None,
                 text: title.to_string(),
-                note: None,
                 tags: taskpaper::Tags::new(),
-            }),
+            },
             Level::Top,
             Position::AsLast,
         );
 
         for item in due_items {
+            // We do not copy over any notes here, just the item itself.
             timeline.insert(item.clone(), Level::Under(&project_id), Position::AsLast);
         }
     }

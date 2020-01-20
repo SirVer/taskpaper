@@ -11,13 +11,10 @@ use taskpaper::{Database, Item, Level, NodeId, Position, Result, Tag, TaskpaperF
 pub struct CommandLineArguments {}
 
 fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
-    for node in tpf {
-        match node.item() {
-            Item::Project(p) if p.text == text => return Some(node.id().clone()),
-            _ => (),
-        }
-    }
-    None
+    tpf.iter()
+        .filter(|node| node.item().is_project())
+        .find(|node| node.item().text() == text)
+        .map(|node| node.id().clone())
 }
 
 /// The items in 'done' are ordered, so that they can be processed in order and unlinked without
@@ -41,10 +38,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
             texts.reverse();
             texts.join(" • ")
         };
-        match item {
-            Item::Project(p) => p.text = new_text,
-            Item::Task(t) => t.text = new_text,
-        }
+        item.text = new_text;
 
         todo.unlink_node(source_node_id);
 
@@ -66,12 +60,12 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
         let project_id = match find_project(logbook, &parent_project) {
             Some(project_id) => project_id,
             None => logbook.insert(
-                Item::Project(taskpaper::Project {
+                Item {
+                    kind: taskpaper::ItemKind::Project,
                     line_index: None,
                     text: parent_project,
-                    note: None,
                     tags: taskpaper::Tags::new(),
-                }),
+                },
                 Level::Top,
                 Position::AsLast,
             ),
@@ -79,13 +73,15 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
         logbook.insert_node(node_id, Level::Under(&project_id), Position::AsLast);
     }
     logbook.sort_nodes_by_key(|node| {
-        cmp::Reverse(match node.item() {
-            Item::Project(p) => match NaiveDate::parse_from_str(&p.text, "%A, %d. %B %Y") {
+        cmp::Reverse(
+            match NaiveDate::parse_from_str(&node.item().text(), "%A, %d. %B %Y") {
                 Ok(v) => v,
-                Err(_) => panic!("Encountered unexpected date formatting: {}", p.text),
+                Err(_) => panic!(
+                    "Encountered unexpected date formatting: {}",
+                    node.item().text()
+                ),
             },
-            _ => panic!("Only expected projects!"),
-        })
+        )
     });
 }
 
@@ -110,39 +106,31 @@ fn append_repeated_items_to_tickle(
     for source_node_id in repeated_items {
         let node_id = tickle.copy_node(todo, source_node_id);
         tickle.insert_node(node_id.clone(), Level::Top, Position::AsLast);
+
         let item = tickle[&node_id].item_mut();
-
-        // Get tags but also remove boxes [X] => [_]
-        let tags = match item {
-            Item::Task(ref mut t) => {
-                if let Some(n) = &t.note {
-                    t.note = Some(reset_boxes(&n));
-                }
-                &mut t.tags
-            }
-            Item::Project(ref mut p) => {
-                if let Some(n) = &mut p.note {
-                    n.text = reset_boxes(&n.text);
-                }
-                &mut p.tags
-            }
-        };
-        let done_tag = &tags.get("done").unwrap().value.unwrap();
-        let done_date = chrono::NaiveDate::parse_from_str(done_tag, "%Y-%m-%d")
+        let done_tag = item.tags().get("done").unwrap().value.unwrap();
+        let done_date = chrono::NaiveDate::parse_from_str(&done_tag, "%Y-%m-%d")
             .map_err(|_| Error::misc(format!("Invalid date: {}", done_tag)))?;
-        tags.remove("done");
+        item.tags_mut().remove("done");
 
-        let duration = tags
+        let duration = item
+            .tags()
             .get("repeat")
             .unwrap()
             .value
             .ok_or_else(|| Error::misc("Invalid @repeat without value."))
             .and_then(|v| parse_duration(&v))?;
         let to_inbox = (done_date + duration).format("%Y-%m-%d").to_string();
-        tags.insert(Tag {
+        item.tags_mut().insert(Tag {
             name: "to_inbox".to_string(),
             value: Some(to_inbox),
         });
+
+        // Remove boxes [X] => [_]
+        for mut node in tickle.iter_node_mut(&node_id).filter(|n| n.item().is_note()) {
+            let text = reset_boxes(node.item().text());
+            node.item_mut().text = text;
+        }
     }
     tickle.sort_nodes_by_key(|node| node.item().tags().get("to_inbox").unwrap().value.unwrap());
     Ok(())

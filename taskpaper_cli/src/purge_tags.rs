@@ -1,7 +1,7 @@
 use crate::ConfigurationFile;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{Error, Item, Result, TaskpaperFile};
+use taskpaper::{Error, Result, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -25,12 +25,8 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
 
     let mut input = TaskpaperFile::parse_file(&args.input)?;
     for mut node in &mut input {
-        let tags = match node.item_mut() {
-            Item::Project(ref mut p) => &mut p.tags,
-            Item::Task(ref mut t) => &mut t.tags,
-        };
         for t in &args.tags {
-            tags.remove(t.trim_start_matches("@"));
+            node.item_mut().tags_mut().remove(t.trim_start_matches("@"));
         }
     }
 

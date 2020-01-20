@@ -77,14 +77,25 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
                 name: "reading".to_string(),
                 value: None,
             });
-            tpf.as_mut().unwrap().insert(
-                taskpaper::Item::Task(taskpaper::Task {
+            let node_id = tpf.as_mut().unwrap().insert(
+                taskpaper::Item {
+                    kind: taskpaper::ItemKind::Task,
                     line_index: None,
                     tags,
                     text: title.trim().to_string(),
-                    note: Some(url.trim().to_string()),
-                }),
+                },
                 Level::Top,
+                Position::AsLast,
+            );
+
+            tpf.as_mut().unwrap().insert(
+                taskpaper::Item {
+                    kind: taskpaper::ItemKind::Note,
+                    line_index: None,
+                    tags: Tags::new(),
+                    text: url.trim().to_string(),
+                },
+                Level::Under(&node_id),
                 Position::AsLast,
             );
         } else {

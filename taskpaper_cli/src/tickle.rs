@@ -1,4 +1,4 @@
-use taskpaper::{Error, Item, Level, Position, Result, TaskpaperFile};
+use taskpaper::{Error, Level, Position, Result, TaskpaperFile};
 
 pub fn tickle(
     inbox: &mut TaskpaperFile,
@@ -18,29 +18,20 @@ pub fn tickle(
     }
 
     for node_id in node_ids {
-        let tags = match tickle[&node_id].item_mut() {
-            Item::Project(ref mut p) => Some(&mut p.tags),
-            Item::Task(ref mut t) => Some(&mut t.tags),
-        };
-
-        if let Some(tags) = tags {
-            let mut tag = tags.get("tickle").unwrap();
-            if tag.value.is_none() {
-                return Err(Error::misc(format!(
-                    "Found @tickle without value: {:?}",
-                    tickle[&node_id].item()
-                )));
-            }
-            tag.name = "to_inbox".to_string();
-            tags.remove("tickle");
-            tags.insert(tag);
+        let tags = tickle[&node_id].item_mut().tags_mut();
+        let mut tag = tags.get("tickle").unwrap();
+        if tag.value.is_none() {
+            return Err(Error::misc(format!(
+                "Found @tickle without value: {:?}",
+                tickle[&node_id].item()
+            )));
         }
+        tag.name = "to_inbox".to_string();
+        tags.remove("tickle");
+        tags.insert(tag);
         tickle.insert_node(node_id, Level::Top, Position::AsLast);
     }
-    tickle.sort_nodes_by_key(|node| match node.item() {
-        Item::Project(p) => p.tags.get("to_inbox").unwrap().value.unwrap(),
-        Item::Task(t) => t.tags.get("to_inbox").unwrap().value.unwrap(),
-    });
+    tickle.sort_nodes_by_key(|node| node.item().tags().get("to_inbox").unwrap().value.unwrap());
 
     // Remove tickle items from tickle file and add to inbox.
     let today = chrono::Local::now().date();

@@ -6,7 +6,7 @@ use osascript::JavaScript;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{tag, Database, Error, Item, NodeId, Result, TaskpaperFile};
+use taskpaper::{tag, Database, Error, NodeId, Result, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -83,13 +83,16 @@ fn get_clipboard(which: char) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-pub fn line_to_task(
+pub fn parse_and_push_task(
+    tpf: &mut TaskpaperFile,
+    level: taskpaper::Level,
+    position: taskpaper::Position,
     mut line: String,
     base64: bool,
     verbatim: bool,
     mail: bool,
     additional_tags: &[String],
-) -> Result<taskpaper::Item> {
+) -> Result<()> {
     let mut line_with_tags = line.trim().to_string();
 
     if base64 {
@@ -132,28 +135,37 @@ pub fn line_to_task(
         }
     }
 
-    let note = if note_text.is_empty() {
-        None
-    } else {
-        Some(note_text.join("\n"))
-    };
+    let node_id = tpf.insert(
+        taskpaper::Item {
+            kind: taskpaper::ItemKind::Task,
+            line_index: None,
+            text: line_without_tags,
+            tags,
+        },
+        level,
+        position,
+    );
 
-    Ok(taskpaper::Item::Task(taskpaper::Task {
-        line_index: None,
-        text: line_without_tags,
-        tags,
-        note,
-    }))
+    for line in note_text {
+        tpf.insert(
+            taskpaper::Item {
+                kind: taskpaper::ItemKind::Note,
+                line_index: None,
+                text: line,
+                tags: taskpaper::Tags::new(),
+            },
+            taskpaper::Level::Under(&node_id),
+            taskpaper::Position::AsLast,
+        );
+    }
+    Ok(())
 }
 
 fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
-    for node in tpf {
-        match node.item() {
-            Item::Project(p) if p.text == text => return Some(node.id().clone()),
-            _ => (),
-        }
-    }
-    None
+    tpf.iter()
+        .filter(|n| n.item().is_project())
+        .find(|n| n.item().text() == text)
+        .map(|n| n.id().clone())
 }
 
 pub fn to_inbox(
@@ -206,8 +218,16 @@ pub fn to_inbox(
     let lines: Vec<String> = input.into_iter().filter(|l| !l.trim().is_empty()).collect();
 
     for line in lines {
-        let task = line_to_task(line, args.base64, args.verbatim, args.mail, &args.tags)?;
-        tpf.insert(task, level, position);
+        parse_and_push_task(
+            &mut tpf,
+            level,
+            position,
+            line,
+            args.base64,
+            args.verbatim,
+            args.mail,
+            &args.tags,
+        )?;
     }
 
     match &args.file {
