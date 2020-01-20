@@ -81,6 +81,9 @@ impl<'a> Iterator for TagsIterator<'a> {
     }
 }
 
+// TODO(sirver): This could be more efficient if we'd simplified the parser to not require
+// lookback, which seems feasible. The cut out of the tags could then already be done in a single
+// iteration.
 pub fn extract_tags(mut line: String) -> (String, Tags) {
     let mut tags = Tags::new();
     let mut found = find_tags(&line);
