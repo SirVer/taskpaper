@@ -127,7 +127,10 @@ fn append_repeated_items_to_tickle(
         });
 
         // Remove boxes [X] => [_]
-        for mut node in tickle.iter_node_mut(&node_id).filter(|n| n.item().is_note()) {
+        for mut node in tickle
+            .iter_node_mut(&node_id)
+            .filter(|n| n.item().is_note())
+        {
             let text = reset_boxes(node.item().text());
             node.item_mut().text = text;
         }

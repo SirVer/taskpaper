@@ -328,7 +328,7 @@ fn is_task(line: &str) -> bool {
     line.trim_start().starts_with("- ")
 }
 
-fn indent(line: &str) -> usize {
+fn find_indent(line: &str) -> usize {
     line.chars().take_while(|c| *c == '\t').count()
 }
 
@@ -336,8 +336,7 @@ fn is_project(line: &str) -> bool {
     line.trim_end().ends_with(':')
 }
 
-fn classify(line: &str) -> LineKind {
-    let (without_tags, _) = tag::extract_tags(line.to_string());
+fn classify(without_tags: &str) -> LineKind {
     if is_task(&without_tags) {
         LineKind::Task
     } else if is_project(&without_tags) {
@@ -345,14 +344,6 @@ fn classify(line: &str) -> LineKind {
     } else {
         LineKind::Note
     }
-}
-
-#[derive(Debug)]
-struct LineToken {
-    line_index: usize,
-    indent: usize,
-    text: String,
-    kind: LineKind,
 }
 
 fn parse_task_text(line_without_tags: &str) -> String {
@@ -366,13 +357,16 @@ fn parse_project_text(line_without_tags: &str) -> String {
     without_tags[..without_tags.len() - 1].to_string()
 }
 
-fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>, arena: &mut Vec<Node>) -> NodeId {
-    let token = it.next().unwrap();
+fn parse_item<'a>(
+    it: &mut Peekable<impl Iterator<Item = (usize, &'a str)>>,
+    arena: &mut Vec<Node>,
+) -> NodeId {
+    let (line_index, line) = it.next().unwrap();
 
-    let (without_tags, tags) = tag::extract_tags(token.text);
+    let (without_tags, tags) = tag::extract_tags(line.to_string());
     let without_tags = without_tags.trim();
 
-    let (kind, text): (_, Cow<str>) = match token.kind {
+    let (kind, text): (_, Cow<str>) = match classify(&without_tags) {
         LineKind::Task => (ItemKind::Task, Cow::Owned(parse_task_text(&without_tags))),
         LineKind::Project => (
             ItemKind::Project,
@@ -388,15 +382,18 @@ fn parse_item(it: &mut Peekable<impl Iterator<Item = LineToken>>, arena: &mut Ve
             kind,
             text: text.to_string(),
             tags,
-            line_index: Some(token.line_index),
+            line_index: Some(line_index),
         },
     });
     let node_id = NodeId(arena.len() - 1);
 
     let mut children = Vec::new();
-    while let Some(nt) = it.peek() {
-        if nt.indent <= token.indent {
-            break;
+    let indent = find_indent(line);
+    loop {
+        match it.peek() {
+            Some((_, next_line)) if find_indent(next_line) >= indent => break,
+            None => break,
+            Some(_) => (),
         }
         let child_node = parse_item(it, arena);
         arena[child_node.0].parent = Some(node_id.clone());
@@ -453,13 +450,7 @@ impl TaskpaperFile {
             .trim()
             .lines()
             .enumerate()
-            .filter(|(_line_index, line)| !line.trim().is_empty())
-            .map(|(line_index, line)| LineToken {
-                line_index: line_index,
-                indent: indent(line),
-                kind: classify(line),
-                text: line.trim().to_string(),
-            });
+            .filter(|(_line_index, line)| !line.trim().is_empty());
 
         let mut nodes = Vec::new();
         let mut arena = Vec::new();
