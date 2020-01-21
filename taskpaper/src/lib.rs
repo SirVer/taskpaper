@@ -10,6 +10,7 @@ pub use crate::tag::{Tag, Tags};
 pub use db::{CommonFileKind, Database};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::cmp;
 use std::collections::VecDeque;
 use std::fmt::{self, Write};
 use std::io;
@@ -20,6 +21,18 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct NodeId(usize);
+
+impl NodeId {
+    #[cfg(feature = "bindings")]
+    pub fn as_u64(&self) -> u64 {
+        self.0 as u64
+    }
+
+    #[cfg(feature = "bindings")]
+    pub fn from_u64(id: u64) -> Self {
+        NodeId(id as usize)
+    }
+}
 
 #[derive(Debug)]
 pub struct Node {
@@ -191,16 +204,20 @@ pub enum ItemKind {
 // The current layout of the Item struct does not make this possible.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Item {
-    // TODO(sirver): need to add indent level here, since indent(c) >= indent(p) + 1.
     pub kind: ItemKind,
 
-    /// The text of this item with any tags stripped.
+    /// The text of this item with any tags stripped and leading indent stripped.
     pub text: String,
 
     /// The collection of Tags that this item contains. Order of the tags is currently lost,
     /// they will be reordered on write.
     pub tags: Tags,
     pub line_index: Option<usize>,
+
+    /// The indentation level of this item. Since it holds that indent(child) >= indent(parent) + 1, the
+    /// indentation is not implicit, but can indeed be different for every child. This can be 0 for
+    /// new items, the items will be indented when they get a parent assigned.
+    pub indent: u32,
 }
 
 impl Item {
@@ -328,8 +345,8 @@ fn is_task(line: &str) -> bool {
     line.trim_start().starts_with("- ")
 }
 
-fn find_indent(line: &str) -> usize {
-    line.chars().take_while(|c| *c == '\t').count()
+fn find_indent(line: &str) -> u32 {
+    line.chars().take_while(|c| *c == '\t').count() as u32
 }
 
 fn is_project(line: &str) -> bool {
@@ -375,10 +392,12 @@ fn parse_item<'a>(
         LineKind::Note => (ItemKind::Note, Cow::Borrowed(without_tags)),
     };
 
+    let indent = find_indent(line);
     arena.push(Node {
         parent: None,
         children: Vec::new(),
         item: Item {
+            indent,
             kind,
             text: text.to_string(),
             tags,
@@ -388,7 +407,6 @@ fn parse_item<'a>(
     let node_id = NodeId(arena.len() - 1);
 
     let mut children = Vec::new();
-    let indent = find_indent(line);
     loop {
         match it.peek() {
             Some((_, next_line)) if find_indent(next_line) <= indent => break,
@@ -442,10 +460,6 @@ impl TaskpaperFile {
     }
 
     pub fn parse(input: &str) -> Result<Self> {
-        // TODO(sirver): We pay a lot here: we allocate for every line, and we
-        // run extract_tags twice on every line. Change this so that we read the whole file,
-        // split it on '\n' and iterate over the slices and then do extract tags & classify on
-        // every line only once.
         let lines = input
             .trim()
             .lines()
@@ -495,7 +509,12 @@ impl TaskpaperFile {
     pub fn insert_node(&mut self, node_id: NodeId, level: Level, position: Position) {
         let vec = match level {
             Level::Top => &mut self.nodes,
-            Level::Under(id) => &mut self.arena[id.0].children,
+            Level::Under(parent_id) => {
+                // Ensure that the indentation of the child is at least the parent + 1.
+                let indent = cmp::max(self.arena[parent_id.0].item().indent + 1, self.arena[node_id.0].item().indent);
+                self.arena[node_id.0].item_mut().indent = indent;
+                &mut self.arena[parent_id.0].children
+            }
         };
         match position {
             Position::AsFirst => vec.insert(0, node_id.clone()),
@@ -654,7 +673,9 @@ impl<'a> IndexMut<&'a NodeId> for TaskpaperFile {
     }
 }
 
-// TODO(sirver): IterItem and IterItemMut seem unnecessary, they are essentially Nodes.
+// TODO(sirver): IterItem and IterItemMut seem unnecessary, they are essentially Nodes, but they
+// protect the nodes from being changed during iteration. Maybe that is worth having another layer
+// of abstraction over this.
 #[derive(Debug)]
 pub struct IterItem<'a> {
     node: &'a Node,
@@ -850,6 +871,7 @@ mod tests {
     fn test_simple_task_parse() {
         let input = r"- A task @tag1 @tag2";
         let golden = vec![Item {
+            indent: 0,
             kind: ItemKind::Task,
             line_index: Some(0),
             text: "A task".to_string(),
@@ -875,6 +897,7 @@ mod tests {
     fn test_task_with_mixed_tags_parse() {
         let input = r"- A task @done(2018-08-05) @another(foo bar) @tag1 @tag2";
         let golden = vec![Item {
+            indent: 0,
             kind: ItemKind::Task,
             text: "A task".to_string(),
             line_index: Some(0),

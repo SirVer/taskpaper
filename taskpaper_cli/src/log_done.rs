@@ -65,6 +65,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
                     line_index: None,
                     text: parent_project,
                     tags: taskpaper::Tags::new(),
+                    indent: 0,
                 },
                 Level::Top,
                 Position::AsLast,

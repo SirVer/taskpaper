@@ -34,10 +34,9 @@ pub struct CommandLineArguments {
 }
 
 pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
-    let rt = tokio::runtime::Runtime::new()?;
+    let mut rt = tokio::runtime::Runtime::new()?;
     let result: Result<Vec<TaskItem>> = rt.block_on(async {
         let client = reqwest::Client::builder()
-            .redirect(reqwest::RedirectPolicy::limited(10))
             .build()
             .map_err(|e| Error::misc(format!("Could not build reqwest client: {:?}", e)))?;
 
@@ -74,6 +73,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
                 kind: taskpaper::ItemKind::Task,
                 text: item.title,
                 tags: tags.clone(),
+                indent: 0,
                 line_index: None,
             },
             Level::Top,
@@ -86,6 +86,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
                     kind: taskpaper::ItemKind::Note,
                     text: line,
                     tags: taskpaper::Tags::new(),
+                    indent: 0,
                     line_index: None,
                 },
                 Level::Under(&node_id),
@@ -124,10 +125,9 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
 }
 
 pub fn get_summary_blocking(url: &str) -> Result<Option<TaskItem>> {
-    let rt = tokio::runtime::Runtime::new()?;
+    let mut rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let client = reqwest::Client::builder()
-            .redirect(reqwest::RedirectPolicy::limited(10))
             .build()
             .map_err(|e| Error::misc(format!("Could not build reqwest client: {:?}", e)))?;
         Ok(get_summary(&client, url).await?)

@@ -138,9 +138,10 @@ pub fn parse_and_push_task(
     let node_id = tpf.insert(
         taskpaper::Item {
             kind: taskpaper::ItemKind::Task,
-            line_index: None,
             text: line_without_tags,
             tags,
+            indent: 0,
+            line_index: None,
         },
         level,
         position,
@@ -150,9 +151,10 @@ pub fn parse_and_push_task(
         tpf.insert(
             taskpaper::Item {
                 kind: taskpaper::ItemKind::Note,
-                line_index: None,
                 text: line,
                 tags: taskpaper::Tags::new(),
+                indent: 0,
+                line_index: None,
             },
             taskpaper::Level::Under(&node_id),
             taskpaper::Position::AsLast,

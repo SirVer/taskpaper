@@ -33,6 +33,7 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
                 line_index: None,
                 text: title.to_string(),
                 tags: taskpaper::Tags::new(),
+                indent: 0,
             },
             Level::Top,
             Position::AsLast,
