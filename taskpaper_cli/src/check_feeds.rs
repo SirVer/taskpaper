@@ -83,7 +83,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
         for line in item.note_text {
             inbox.insert(
                 taskpaper::Item {
-                    kind: taskpaper::ItemKind::Task,
+                    kind: taskpaper::ItemKind::Note,
                     text: line,
                     tags: taskpaper::Tags::new(),
                     line_index: None,
