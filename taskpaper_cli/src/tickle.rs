@@ -1,4 +1,5 @@
-use taskpaper::{Error, Level, Position, Result, TaskpaperFile};
+use anyhow::{anyhow, Result};
+use taskpaper::{Level, Position, TaskpaperFile};
 
 pub fn tickle(
     inbox: &mut TaskpaperFile,
@@ -21,10 +22,10 @@ pub fn tickle(
         let tags = tickle[&node_id].item_mut().tags_mut();
         let mut tag = tags.get("tickle").unwrap();
         if tag.value.is_none() {
-            return Err(Error::misc(format!(
+            return Err(anyhow!(
                 "Found @tickle without value: {:?}",
                 tickle[&node_id].item()
-            )));
+            ));
         }
         tag.name = "to_inbox".to_string();
         tags.remove("tickle");

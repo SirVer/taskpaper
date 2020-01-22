@@ -1,4 +1,5 @@
-use taskpaper::{Database, Level, Position, Result, TaskpaperFile};
+use anyhow::Result;
+use taskpaper::{Database, Level, Position, TaskpaperFile};
 
 pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
     if let Some(path) = db.path_of_common_file(taskpaper::CommonFileKind::Checkout) {

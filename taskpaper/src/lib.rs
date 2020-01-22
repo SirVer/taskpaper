@@ -59,31 +59,13 @@ impl Node {
     }
 }
 
-// TODO(sirver): Convert to use thiserror
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
-    Misc(String),
-    Other(Box<dyn ::std::error::Error>),
-    Io(io::Error),
+    #[error("I/O: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("invalid query: {0}")]
     QuerySyntaxError(String),
-}
-
-impl From<io::Error> for Error {
-    fn from(other: io::Error) -> Error {
-        Error::Io(other)
-    }
-}
-
-impl From<Box<dyn ::std::error::Error>> for Error {
-    fn from(other: Box<dyn ::std::error::Error>) -> Error {
-        Error::Other(other)
-    }
-}
-
-impl Error {
-    pub fn misc(text: impl Into<String>) -> Self {
-        Error::Misc(text.into())
-    }
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;
@@ -452,6 +434,10 @@ impl TaskpaperFile {
         }
     }
 
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_ref().map(|p| p as &Path)
+    }
+
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
         let text = ::std::fs::read_to_string(&path)?;
         let mut s = Self::parse(&text)?;
@@ -511,7 +497,10 @@ impl TaskpaperFile {
             Level::Top => &mut self.nodes,
             Level::Under(parent_id) => {
                 // Ensure that the indentation of the child is at least the parent + 1.
-                let indent = cmp::max(self.arena[parent_id.0].item().indent + 1, self.arena[node_id.0].item().indent);
+                let indent = cmp::max(
+                    self.arena[parent_id.0].item().indent + 1,
+                    self.arena[node_id.0].item().indent,
+                );
                 self.arena[node_id.0].item_mut().indent = indent;
                 &mut self.arena[parent_id.0].children
             }

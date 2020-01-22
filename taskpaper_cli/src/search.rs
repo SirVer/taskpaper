@@ -1,8 +1,9 @@
 use crate::ConfigurationFile;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-use taskpaper::{db::Database, Result, TaskpaperFile};
+use taskpaper::{db::Database, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {

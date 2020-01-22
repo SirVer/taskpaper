@@ -1,8 +1,9 @@
 use crate::ConfigurationFile;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use structopt::StructOpt;
-use taskpaper::{Database, Result};
+use taskpaper::Database;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Formats {

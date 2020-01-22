@@ -1,4 +1,5 @@
 use crate::ConfigurationFile;
+use anyhow::{anyhow, Context, Result};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
@@ -7,7 +8,7 @@ use std::fs;
 use std::io;
 use structopt::StructOpt;
 use syndication::Feed;
-use taskpaper::{Database, Error, Level, Position, Result};
+use taskpaper::{Database, Level, Position};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
 
@@ -36,9 +37,7 @@ pub struct CommandLineArguments {
 pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let mut rt = tokio::runtime::Runtime::new()?;
     let result: Result<Vec<TaskItem>> = rt.block_on(async {
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| Error::misc(format!("Could not build reqwest client: {:?}", e)))?;
+        let client = reqwest::Client::builder().build()?;
 
         let feeds = read_feeds(db, &client, &config.feeds).await?;
         let mut rv = Vec::new();
@@ -60,7 +59,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
 
     let style = match config.formats.get(&args.style) {
         Some(format) => *format,
-        None => return Err(Error::misc(format!("Style '{}' not found.", args.style))),
+        None => return Err(anyhow!("Style '{}' not found.", args.style)),
     };
 
     let mut tags = taskpaper::Tags::new();
@@ -127,22 +126,13 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
 pub fn get_summary_blocking(url: &str) -> Result<Option<TaskItem>> {
     let mut rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| Error::misc(format!("Could not build reqwest client: {:?}", e)))?;
+        let client = reqwest::Client::builder().build()?;
         Ok(get_summary(&client, url).await?)
     })
 }
 
 async fn get_page_body(client: &reqwest::Client, url: &str) -> Result<String> {
-    Ok(client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| Error::misc(format!("Could not send get request: {:?}", e)))?
-        .text()
-        .await
-        .map_err(|e| Error::misc(format!("Could not get page body text: {:?}", e)))?)
+    Ok(client.get(url).send().await?.text().await?)
 }
 
 /// Turns a url into a TaskItem, suitable for use in the inbox.
@@ -230,7 +220,7 @@ async fn read_feeds(
     let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
     let seen_ids = match fs::read_to_string(&archive) {
         Ok(data) => toml::from_str(&data)
-            .map_err(|_| Error::misc(format!("Could not parse {}", archive.display())))?,
+            .with_context(|| format!("Could not parse {}", archive.display()))?,
         Err(e) if e.kind() == io::ErrorKind::NotFound => SeenIds::default(),
         Err(e) => return Err(e.into()),
     };
@@ -247,7 +237,7 @@ async fn read_feeds(
             let mut items = Vec::new();
             match body
                 .parse::<Feed>()
-                .map_err(|e| Error::misc(format!("Could not parse for {}: {}", feed.url, e)))?
+                .map_err(|e| anyhow!("Could not parse for {}: {}", feed.url, e))?
             {
                 Feed::RSS(channel) => {
                     for item in channel.items() {

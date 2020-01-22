@@ -1,11 +1,11 @@
 use crate::ConfigurationFile;
+use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::cmp;
 use structopt::StructOpt;
-use taskpaper::Error;
-use taskpaper::{Database, Item, Level, NodeId, Position, Result, Tag, TaskpaperFile};
+use taskpaper::{Database, Item, Level, NodeId, Position, Tag, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
@@ -111,7 +111,7 @@ fn append_repeated_items_to_tickle(
         let item = tickle[&node_id].item_mut();
         let done_tag = item.tags().get("done").unwrap().value.unwrap();
         let done_date = chrono::NaiveDate::parse_from_str(&done_tag, "%Y-%m-%d")
-            .map_err(|_| Error::misc(format!("Invalid date: {}", done_tag)))?;
+            .with_context(|| format!("Invalid date: {}", done_tag))?;
         item.tags_mut().remove("done");
 
         let duration = item
@@ -119,7 +119,7 @@ fn append_repeated_items_to_tickle(
             .get("repeat")
             .unwrap()
             .value
-            .ok_or_else(|| Error::misc("Invalid @repeat without value."))
+            .ok_or_else(|| anyhow!("Invalid @repeat without value."))
             .and_then(|v| parse_duration(&v))?;
         let to_inbox = (done_date + duration).format("%Y-%m-%d").to_string();
         item.tags_mut().insert(Tag {
@@ -147,7 +147,7 @@ pub fn parse_duration(s: &str) -> Result<chrono::Duration> {
 
     let captures = DURATION
         .captures(&s)
-        .ok_or_else(|| Error::misc(format!("Invalid duration: {}", s)))?;
+        .ok_or_else(|| anyhow!("Invalid duration: {}", s))?;
     let num: i32 = captures.get(1).unwrap().as_str().parse().unwrap();
     const HOURS: u64 = 60 * 60;
     const DAYS: u64 = HOURS * 24;

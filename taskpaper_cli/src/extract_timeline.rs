@@ -1,6 +1,7 @@
 use crate::ConfigurationFile;
+use anyhow::{Context, Result};
 use std::collections::BTreeMap;
-use taskpaper::{Database, Error, Level, Position, Result, TaskpaperFile};
+use taskpaper::{Database, Level, Position, TaskpaperFile};
 
 pub fn extract_timeline(
     db: &Database,
@@ -22,7 +23,7 @@ pub fn extract_timeline(
             Some(v) => v,
         };
         let mut due = chrono::NaiveDate::parse_from_str(&due, "%Y-%m-%d")
-            .map_err(|_| Error::misc(format!("Invalid date: {}", due)))?;
+            .with_context(|| format!("Invalid date: {}", due))?;
         if due < today {
             due = today.pred();
         }

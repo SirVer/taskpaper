@@ -1,9 +1,10 @@
 use crate::ConfigurationFile;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{Error, Result, TaskpaperFile};
+use taskpaper::TaskpaperFile;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Formats {
@@ -27,7 +28,7 @@ pub fn format(args: &CommandLineArguments, config: &ConfigurationFile) -> Result
         None => taskpaper::FormatOptions::default(),
         Some(s) => match config.formats.get(s) {
             Some(format) => *format,
-            None => return Err(Error::misc(format!("Style '{}' not found.", s))),
+            None => return Err(anyhow!("Style '{}' not found.", s)),
         },
     };
 

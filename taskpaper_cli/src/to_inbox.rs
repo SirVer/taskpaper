@@ -1,4 +1,5 @@
 use crate::ConfigurationFile;
+use anyhow::{anyhow, Result};
 #[cfg(target_os = "macos")]
 use clipboard::{ClipboardContext, ClipboardProvider};
 #[cfg(target_os = "macos")]
@@ -6,7 +7,7 @@ use osascript::JavaScript;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{tag, Database, Error, NodeId, Result, TaskpaperFile};
+use taskpaper::{tag, Database, NodeId, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -55,14 +56,17 @@ fn get_currently_selected_mail_message() -> Result<String> {
         return Mail.selection()[0].messageId()
     ",
     );
-    let message_id = script.execute().map_err(|e| Error::misc(e.to_string()))?;
+    let message_id = script.execute()?;
     Ok(message_id)
 }
 
 #[cfg(target_os = "macos")]
 fn get_clipboard(_: char) -> Result<String> {
-    let mut ctx: ClipboardContext = ClipboardProvider::new()?;
-    let contents = ctx.get_contents()?;
+    let mut ctx: ClipboardContext = ClipboardProvider::new()
+        .map_err(|e| anyhow!("Could not create clipboard context: {}", e))?;
+    let contents = ctx
+        .get_contents()
+        .map_err(|e| anyhow!("Could not get clipboard contents: {}", e))?;
     Ok(contents)
 }
 
@@ -96,9 +100,7 @@ pub fn parse_and_push_task(
     let mut line_with_tags = line.trim().to_string();
 
     if base64 {
-        let decoded = base64::decode(&line_with_tags).map_err(|_| {
-            Error::misc("Input not base64 encoded, though base64 decoding was requested.")
-        })?;
+        let decoded = base64::decode(&line_with_tags)?;
         line = String::from_utf8_lossy(&decoded).to_string();
         line_with_tags = line.trim().to_string();
     }
@@ -188,8 +190,8 @@ pub fn to_inbox(
 
     let node_id;
     let level = if let Some(p) = &args.project {
-        node_id = find_project(&tpf, p)
-            .ok_or_else(|| Error::misc(format!("Could not find project '{}'.", p)))?;
+        node_id =
+            find_project(&tpf, p).ok_or_else(|| anyhow!("Could not find project '{}'.", p))?;
         taskpaper::Level::Under(&node_id)
     } else {
         taskpaper::Level::Top
@@ -202,7 +204,7 @@ pub fn to_inbox(
 
     let style = match config.formats.get(&args.style) {
         Some(format) => *format,
-        None => return Err(Error::misc(format!("Style '{}' not found.", args.style))),
+        None => return Err(anyhow!("Style '{}' not found.", args.style)),
     };
 
     let input: Vec<String> = if args.prompt {

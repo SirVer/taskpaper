@@ -1,7 +1,8 @@
 use crate::ConfigurationFile;
+use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{Error, Result, TaskpaperFile};
+use taskpaper::TaskpaperFile;
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -20,7 +21,7 @@ pub struct CommandLineArguments {
 pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let style = match config.formats.get(&args.style) {
         Some(format) => *format,
-        None => return Err(Error::misc(format!("Style '{}' not found.", args.style))),
+        None => return Err(anyhow!("Style '{}' not found.", args.style)),
     };
 
     let mut input = TaskpaperFile::parse_file(&args.input)?;
