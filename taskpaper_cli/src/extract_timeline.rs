@@ -44,13 +44,7 @@ pub fn extract_timeline(
         };
 
         let project_id = timeline.insert(
-            taskpaper::Item {
-                kind: taskpaper::ItemKind::Project,
-                text: title.to_string(),
-                tags: taskpaper::Tags::new(),
-                line_index: None,
-                indent: 0,
-            },
+            taskpaper::Item::new(taskpaper::ItemKind::Project, title.to_string()),
             Level::Top,
             Position::AsLast,
         );

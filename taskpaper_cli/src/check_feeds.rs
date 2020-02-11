@@ -68,26 +68,14 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
     for item in result? {
         let node_id = inbox.insert(
-            taskpaper::Item {
-                kind: taskpaper::ItemKind::Task,
-                text: item.title,
-                tags: tags.clone(),
-                indent: 0,
-                line_index: None,
-            },
+            taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, item.title, tags.clone()),
             Level::Top,
             Position::AsLast,
         );
 
         for line in item.note_text {
             inbox.insert(
-                taskpaper::Item {
-                    kind: taskpaper::ItemKind::Note,
-                    text: line,
-                    tags: taskpaper::Tags::new(),
-                    indent: 0,
-                    line_index: None,
-                },
+                taskpaper::Item::new(taskpaper::ItemKind::Note, line),
                 Level::Under(&node_id),
                 Position::AsLast,
             );

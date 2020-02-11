@@ -60,13 +60,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
         let project_id = match find_project(logbook, &parent_project) {
             Some(project_id) => project_id,
             None => logbook.insert(
-                Item {
-                    kind: taskpaper::ItemKind::Project,
-                    line_index: None,
-                    text: parent_project,
-                    tags: taskpaper::Tags::new(),
-                    indent: 0,
-                },
+                Item::new(taskpaper::ItemKind::Project, parent_project),
                 Level::Top,
                 Position::AsLast,
             ),

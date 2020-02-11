@@ -29,13 +29,7 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
         }
 
         let project_id = checkout.insert(
-            taskpaper::Item {
-                kind: taskpaper::ItemKind::Project,
-                line_index: None,
-                text: title.to_string(),
-                tags: taskpaper::Tags::new(),
-                indent: 0,
-            },
+            taskpaper::Item::new(taskpaper::ItemKind::Project, title.to_string()),
             Level::Top,
             Position::AsLast,
         );

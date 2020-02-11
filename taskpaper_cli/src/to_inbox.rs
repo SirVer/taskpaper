@@ -138,26 +138,14 @@ pub fn parse_and_push_task(
     }
 
     let node_id = tpf.insert(
-        taskpaper::Item {
-            kind: taskpaper::ItemKind::Task,
-            text: line_without_tags,
-            tags,
-            indent: 0,
-            line_index: None,
-        },
+        taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, line_without_tags, tags),
         level,
         position,
     );
 
     for line in note_text {
         tpf.insert(
-            taskpaper::Item {
-                kind: taskpaper::ItemKind::Note,
-                text: line,
-                tags: taskpaper::Tags::new(),
-                indent: 0,
-                line_index: None,
-            },
+            taskpaper::Item::new(taskpaper::ItemKind::Note, line),
             taskpaper::Level::Under(&node_id),
             taskpaper::Position::AsLast,
         );

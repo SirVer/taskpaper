@@ -107,24 +107,8 @@ pub struct EmptyLineAfterProject {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum PrintChildren {
-    // TODO(sirver): Document.
-    Yes,
-    No,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum PrintNotes {
-    // TODO(sirver): Document.
-    Yes,
-    No,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FormatOptions {
     pub sort: Sort,
-    pub print_children: PrintChildren,
-    pub print_notes: PrintNotes,
     pub empty_line_after_project: EmptyLineAfterProject,
 }
 
@@ -132,8 +116,6 @@ impl Default for FormatOptions {
     fn default() -> Self {
         FormatOptions {
             sort: Sort::ProjectsFirst,
-            print_children: PrintChildren::Yes,
-            print_notes: PrintNotes::Yes,
             empty_line_after_project: EmptyLineAfterProject {
                 top_level: 1,
                 first_level: 1,
@@ -157,17 +139,7 @@ fn append_project_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt
     Ok(())
 }
 
-fn append_note_to_string(
-    item: &Item,
-    buf: &mut String,
-    indent: usize,
-    options: FormatOptions,
-) -> fmt::Result {
-    match options.print_notes {
-        PrintNotes::No => return Ok(()),
-        PrintNotes::Yes => (),
-    }
-
+fn append_note_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::Result {
     let indent = "\t".repeat(indent);
     for line in item.text.split_terminator('\n') {
         writeln!(buf, "{}{}", indent, line)?;
@@ -188,18 +160,40 @@ pub enum ItemKind {
 pub struct Item {
     pub kind: ItemKind,
 
-    /// The text of this item with any tags stripped and leading indent stripped.
+    /// The text of this item with any tags stripped and leading indent stripped. It is guaranteed
+    /// that this text does not neither contain a newline '\n' or a carriage return '\r' character.
     pub text: String,
 
     /// The collection of Tags that this item contains. Order of the tags is currently lost,
     /// they will be reordered on write.
     pub tags: Tags,
-    pub line_index: Option<usize>,
+    line_index: Option<usize>,
 
     /// The indentation level of this item. Since it holds that indent(child) >= indent(parent) + 1, the
     /// indentation is not implicit, but can indeed be different for every child. This can be 0 for
     /// new items, the items will be indented when they get a parent assigned.
     pub indent: u32,
+}
+
+impl Item {
+    pub fn new(kind: ItemKind, text: String) -> Self {
+        assert!(text.find('\r').is_none());
+        assert!(text.find('\n').is_none());
+
+        Item {
+            kind,
+            text,
+            tags: Tags::new(),
+            line_index: None,
+            indent: 0,
+        }
+    }
+
+    pub fn new_with_tags(kind: ItemKind, text: String, tags: Tags) -> Self {
+        let mut item = Self::new(kind, text);
+        item.tags = tags;
+        item
+    }
 }
 
 impl Item {
@@ -295,17 +289,12 @@ fn print_nodes(
                 0
             }
             ItemKind::Note => {
-                append_note_to_string(&node.item, buf, indent, options)?;
+                append_note_to_string(&node.item, buf, indent)?;
                 0
             }
         };
 
-        match options.print_children {
-            PrintChildren::No => (),
-            PrintChildren::Yes => {
-                print_nodes(node.children.clone(), arena, buf, indent + 1, options)?
-            }
-        }
+        print_nodes(node.children.clone(), arena, buf, indent + 1, options)?;
 
         for _ in 0..add_empty_line {
             maybe_empty_line(buf, idx)?;
@@ -518,10 +507,17 @@ impl TaskpaperFile {
         buf
     }
 
-    pub fn node_to_string(&self, node_id: &NodeId, options: FormatOptions) -> String {
+    pub fn node_to_string(&self, node_id: &NodeId) -> String {
         let mut buf = String::new();
-        print_nodes(vec![node_id.clone()], &self.arena, &mut buf, 0, options)
-            .expect("Formatting should never fail.");
+        let item = self.arena[node_id.0].item();
+        match &item.kind {
+            ItemKind::Project => append_project_to_string(item, &mut buf, 0)
+                .expect("Writing to string should always work."),
+            ItemKind::Task => append_task_to_string(item, &mut buf, 0)
+                .expect("Writing to string should always work."),
+            ItemKind::Note => append_note_to_string(item, &mut buf, 0)
+                .expect("Writing to string should always work."),
+        };
         buf
     }
 

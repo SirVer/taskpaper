@@ -59,21 +59,6 @@ pub fn search(
         results.insert(path as &Path, (tpf.search(&query)?, tpf));
     }
 
-    let options = taskpaper::FormatOptions {
-        sort: taskpaper::Sort::Nothing,
-        print_children: if args.descendants {
-            taskpaper::PrintChildren::Yes
-        } else {
-            taskpaper::PrintChildren::No
-        },
-        print_notes: if args.descendants {
-            taskpaper::PrintNotes::Yes
-        } else {
-            taskpaper::PrintNotes::No
-        },
-        ..Default::default()
-    };
-
     let mut paths: Vec<_> = results.keys().collect();
     paths.sort();
     for path in paths {
@@ -84,8 +69,17 @@ pub fn search(
         for node_id in node_ids {
             let item = tpf[node_id].item();
             let line = item.line_index().unwrap() + 1;
-            let text = tpf.node_to_string(node_id, options);
+            let text = tpf.node_to_string(node_id);
             print!("{}:{}:{}", path.display(), line, text);
+            if args.descendants {
+                // We skip the node itself, since that has been taken care off.
+                for child_node in tpf.iter_node(node_id).skip(1) {
+                    let indent = child_node.item().indent - item.indent;
+                    let indent_str = "\t".repeat(indent as usize);
+                    let text = tpf.node_to_string(child_node.id());
+                    print!("{}{}", indent_str, text);
+                }
+            }
         }
     }
 
