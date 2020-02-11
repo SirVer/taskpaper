@@ -2,7 +2,7 @@ use chrono::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 use structopt::StructOpt;
-use taskpaper::{Database, Level, Position, Tags};
+use taskpaper::{Database, Position, Tags};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -83,14 +83,12 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
                     title.trim().to_string(),
                     tags,
                 ),
-                Level::Top,
                 Position::AsLast,
             );
 
             tpf.as_mut().unwrap().insert(
                 taskpaper::Item::new(taskpaper::ItemKind::Note, url.trim().to_string()),
-                Level::Under(&node_id),
-                Position::AsLast,
+                Position::AsLastChildOf(&node_id),
             );
         } else {
             println!("- {} @reading{}\n\t{}", title.trim(), done_str, url.trim());

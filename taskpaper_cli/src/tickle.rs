@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use taskpaper::{Level, Position, TaskpaperFile};
+use taskpaper::{Position, TaskpaperFile};
 
 pub fn tickle(
     inbox: &mut TaskpaperFile,
@@ -30,7 +30,7 @@ pub fn tickle(
         tag.name = "to_inbox".to_string();
         tags.remove("tickle");
         tags.insert(tag);
-        tickle.insert_node(node_id, Level::Top, Position::AsLast);
+        tickle.insert_node(node_id, Position::AsLast);
     }
     tickle.sort_nodes_by_key(|node| node.item().tags().get("to_inbox").unwrap().value.unwrap());
 
@@ -43,7 +43,7 @@ pub fn tickle(
 
     for node_id in to_inbox {
         let inbox_id = inbox.copy_node(tickle, &node_id);
-        inbox.insert_node(inbox_id, Level::Top, Position::AsLast);
+        inbox.insert_node(inbox_id, Position::AsLast);
     }
 
     Ok(())

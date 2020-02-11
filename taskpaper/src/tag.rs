@@ -64,6 +64,10 @@ impl Tags {
     pub fn len(&self) -> usize {
         self.tags.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.tags.is_empty()
+    }
 }
 
 pub struct TagsIterator<'a> {
@@ -275,11 +279,8 @@ fn find_tags(s: &str) -> Vec<(Tag, (usize, usize))> {
     let mut tags = Vec::new();
     while !parser.is_at_end() {
         let token = parser.advance();
-        match token.kind {
-            TokenKind::At => {
-                parser.tag().map(|r| tags.push(r));
-            }
-            _ => (),
+        if token.kind == TokenKind::At {
+            parser.tag().map(|r| tags.push(r));
         }
     }
     tags

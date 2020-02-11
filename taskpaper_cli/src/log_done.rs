@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::cmp;
 use structopt::StructOpt;
-use taskpaper::{Database, Item, Level, NodeId, Position, Tag, TaskpaperFile};
+use taskpaper::{Database, Item, NodeId, Position, Tag, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
@@ -61,11 +61,10 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
             Some(project_id) => project_id,
             None => logbook.insert(
                 Item::new(taskpaper::ItemKind::Project, parent_project),
-                Level::Top,
                 Position::AsLast,
             ),
         };
-        logbook.insert_node(node_id, Level::Under(&project_id), Position::AsLast);
+        logbook.insert_node(node_id, Position::AsLastChildOf(&project_id));
     }
     logbook.sort_nodes_by_key(|node| {
         cmp::Reverse(
@@ -100,7 +99,7 @@ fn append_repeated_items_to_tickle(
 ) -> Result<()> {
     for source_node_id in repeated_items {
         let node_id = tickle.copy_node(todo, source_node_id);
-        tickle.insert_node(node_id.clone(), Level::Top, Position::AsLast);
+        tickle.insert_node(node_id.clone(), Position::AsLast);
 
         let item = tickle[&node_id].item_mut();
         let done_tag = item.tags().get("done").unwrap().value.unwrap();

@@ -50,10 +50,10 @@ impl Database {
             Err(_) => return None,
             Ok(a) => a,
         };
-        if rel != canon {
-            Some(rel.to_path_buf())
-        } else {
+        if rel == canon {
             None
+        } else {
+            Some(rel.to_path_buf())
         }
     }
 

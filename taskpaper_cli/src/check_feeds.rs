@@ -8,7 +8,7 @@ use std::fs;
 use std::io;
 use structopt::StructOpt;
 use syndication::Feed;
-use taskpaper::{Database, Level, Position};
+use taskpaper::{Database, Position};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
 
@@ -69,15 +69,13 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     for item in result? {
         let node_id = inbox.insert(
             taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, item.title, tags.clone()),
-            Level::Top,
             Position::AsLast,
         );
 
         for line in item.note_text {
             inbox.insert(
                 taskpaper::Item::new(taskpaper::ItemKind::Note, line),
-                Level::Under(&node_id),
-                Position::AsLast,
+                Position::AsLastChildOf(&node_id),
             );
         }
     }

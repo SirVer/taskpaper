@@ -1,7 +1,7 @@
 use crate::ConfigurationFile;
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
-use taskpaper::{Database, Level, Position, TaskpaperFile};
+use taskpaper::{Database, Position, TaskpaperFile};
 
 pub fn extract_timeline(
     db: &Database,
@@ -45,13 +45,12 @@ pub fn extract_timeline(
 
         let project_id = timeline.insert(
             taskpaper::Item::new(taskpaper::ItemKind::Project, title.to_string()),
-            Level::Top,
             Position::AsLast,
         );
 
         for item in due_items {
             // We do not copy over any notes here, just the item itself.
-            timeline.insert(item.clone(), Level::Under(&project_id), Position::AsLast);
+            timeline.insert(item.clone(), Position::AsLastChildOf(&project_id));
         }
     }
     db.overwrite_common_file(

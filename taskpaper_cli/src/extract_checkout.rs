@@ -1,5 +1,5 @@
 use anyhow::Result;
-use taskpaper::{Database, Level, Position, TaskpaperFile};
+use taskpaper::{Database, Position, TaskpaperFile};
 
 pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
     if let Some(path) = db.path_of_common_file(taskpaper::CommonFileKind::Checkout) {
@@ -30,14 +30,12 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
 
         let project_id = checkout.insert(
             taskpaper::Item::new(taskpaper::ItemKind::Project, title.to_string()),
-            Level::Top,
             Position::AsLast,
         );
         for node_id in &search_results {
             let task_id = checkout.insert(
                 todo[node_id].item().clone(),
-                Level::Under(&project_id),
-                Position::AsLast,
+                Position::AsLastChildOf(&project_id),
             );
 
             // Also copy over the notes that are immediate children.
@@ -45,11 +43,7 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
                 if !todo[&c].item().is_note() {
                     continue;
                 }
-                checkout.insert(
-                    todo[&c].item().clone(),
-                    Level::Under(&task_id),
-                    Position::AsLast,
-                );
+                checkout.insert(todo[&c].item().clone(), Position::AsLastChildOf(&task_id));
             }
         }
     }

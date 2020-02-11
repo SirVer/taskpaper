@@ -89,7 +89,6 @@ fn get_clipboard(which: char) -> Result<String> {
 
 pub fn parse_and_push_task(
     tpf: &mut TaskpaperFile,
-    level: taskpaper::Level,
     position: taskpaper::Position,
     mut line: String,
     base64: bool,
@@ -139,15 +138,13 @@ pub fn parse_and_push_task(
 
     let node_id = tpf.insert(
         taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, line_without_tags, tags),
-        level,
         position,
     );
 
     for line in note_text {
         tpf.insert(
             taskpaper::Item::new(taskpaper::ItemKind::Note, line),
-            taskpaper::Level::Under(&node_id),
-            taskpaper::Position::AsLast,
+            taskpaper::Position::AsLastChildOf(&node_id),
         );
     }
     Ok(())
@@ -177,17 +174,20 @@ pub fn to_inbox(
     };
 
     let node_id;
-    let level = if let Some(p) = &args.project {
+    let position = if let Some(p) = &args.project {
         node_id =
             find_project(&tpf, p).ok_or_else(|| anyhow!("Could not find project '{}'.", p))?;
-        taskpaper::Level::Under(&node_id)
+        if args.prepend {
+            taskpaper::Position::AsFirstChildOf(&node_id)
+        } else {
+            taskpaper::Position::AsLastChildOf(&node_id)
+        }
     } else {
-        taskpaper::Level::Top
-    };
-    let position = if args.prepend {
-        taskpaper::Position::AsFirst
-    } else {
-        taskpaper::Position::AsLast
+        if args.prepend {
+            taskpaper::Position::AsFirst
+        } else {
+            taskpaper::Position::AsLast
+        }
     };
 
     let style = match config.formats.get(&args.style) {
@@ -212,7 +212,6 @@ pub fn to_inbox(
     for line in lines {
         parse_and_push_task(
             &mut tpf,
-            level,
             position,
             line,
             args.base64,

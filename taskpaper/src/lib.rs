@@ -19,7 +19,7 @@ use std::mem;
 use std::ops::{Index, IndexMut};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeId(usize);
 
 impl NodeId {
@@ -267,7 +267,7 @@ fn print_nodes(
         // Only if there is a next item and that is a project do we actually print a new line.
         if let Some(id) = node_ids.get(idx + 1) {
             if arena[id.0].item.is_project() {
-                writeln!(buf, "")?;
+                writeln!(buf)?;
             }
         }
         Ok(())
@@ -403,15 +403,12 @@ pub struct TaskpaperFile {
 }
 
 #[derive(Clone, Copy)]
-pub enum Position {
+pub enum Position<'a> {
     AsFirst,
     AsLast,
-}
-
-#[derive(Clone, Copy)]
-pub enum Level<'a> {
-    Top,
-    Under(&'a NodeId),
+    AsFirstChildOf(&'a NodeId),
+    AsLastChildOf(&'a NodeId),
+    After(&'a NodeId),
 }
 
 impl TaskpaperFile {
@@ -475,29 +472,57 @@ impl TaskpaperFile {
         self.nodes = nodes;
     }
 
-    pub fn insert(&mut self, item: Item, level: Level, position: Position) -> NodeId {
+    pub fn insert(&mut self, item: Item, position: Position) -> NodeId {
         let node_id = self.register_item(item);
-        self.insert_node(node_id.clone(), level, position);
+        self.insert_node(node_id.clone(), position);
         node_id
     }
 
-    pub fn insert_node(&mut self, node_id: NodeId, level: Level, position: Position) {
-        let vec = match level {
-            Level::Top => &mut self.nodes,
-            Level::Under(parent_id) => {
-                // Ensure that the indentation of the child is at least the parent + 1.
-                let indent = cmp::max(
-                    self.arena[parent_id.0].item().indent + 1,
-                    self.arena[node_id.0].item().indent,
+    pub fn insert_node(&mut self, node_id: NodeId, position: Position) {
+        // Ensure that the indentation of the child is at least the parent + 1.
+        let ensure_indent_larger_then_parent = |arena: &mut [Node], parent_id: &NodeId| {
+            let indent = cmp::max(
+                arena[parent_id.0].item().indent + 1,
+                arena[node_id.0].item().indent,
+            );
+            arena[node_id.0].item_mut().indent = indent;
+        };
+
+        match position {
+            Position::AsFirst => {
+                self.arena[node_id.0].parent = None;
+                self.nodes.insert(0, node_id);
+            }
+            // NOCOM(#sirver): does clippy catch this?
+            Position::AsLast => {
+                self.arena[node_id.0].parent = None;
+                self.nodes.push(node_id.clone());
+            }
+            Position::AsFirstChildOf(parent_id) => {
+                ensure_indent_larger_then_parent(&mut self.arena, parent_id);
+                self.arena[node_id.0].parent = Some(parent_id.clone());
+                self.arena[parent_id.0].children.insert(0, node_id)
+            }
+            Position::AsLastChildOf(parent_id) => {
+                ensure_indent_larger_then_parent(&mut self.arena, parent_id);
+                self.arena[node_id.0].parent = Some(parent_id.clone());
+                self.arena[parent_id.0].children.push(node_id)
+            }
+            Position::After(sibling_id) => {
+                let parent_id = self.arena[sibling_id.0].parent.clone().expect(
+                    "Passing Position::After with a node that has no parent is unexpected.",
                 );
-                self.arena[node_id.0].item_mut().indent = indent;
-                &mut self.arena[parent_id.0].children
+                ensure_indent_larger_then_parent(&mut self.arena, &parent_id);
+                self.arena[node_id.0].parent = Some(parent_id.clone());
+                let parent_node = &mut self.arena[parent_id.0];
+                let position = parent_node
+                    .children
+                    .iter()
+                    .position(|id| *id == *sibling_id)
+                    .expect("Sibling not actually a child of parent.");
+                parent_node.children.insert(position + 1, node_id);
             }
         };
-        match position {
-            Position::AsFirst => vec.insert(0, node_id.clone()),
-            Position::AsLast => vec.push(node_id.clone()),
-        }
     }
 
     pub fn to_string(&self, options: FormatOptions) -> String {
@@ -835,11 +860,7 @@ pub fn mirror_changes(
                 continue;
             }
             let dest_child_id = destination.copy_node(&source, source_child_id);
-            destination.insert_node(
-                dest_child_id,
-                Level::Under(&destination_id),
-                Position::AsLast,
-            );
+            destination.insert_node(dest_child_id, Position::AsLastChildOf(&destination_id));
         }
     }
 

@@ -132,7 +132,7 @@ impl Value {
             (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
             (Value::Bool(_), Value::String(_)) => Value::Undefined,
             (Value::String(_), Value::Bool(_)) => Value::Undefined,
-            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a < b),
+            (Value::Bool(a), Value::Bool(b)) => Value::Bool(!a & b),
             (Value::String(a), Value::String(b)) => Value::Bool(a < b),
         }
     }
@@ -152,7 +152,7 @@ impl Value {
             (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
             (Value::Bool(_), Value::String(_)) => Value::Undefined,
             (Value::String(_), Value::Bool(_)) => Value::Undefined,
-            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a > b),
+            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a & !b),
             (Value::String(a), Value::String(b)) => Value::Bool(a > b),
         }
     }
@@ -174,9 +174,9 @@ impl Expr {
         let mut parser = Parser::new(tokens);
         let expr = *parser.expression()?;
         if !parser.is_at_end() {
-            return Err(Error::QuerySyntaxError(format!(
-                "Unexpected tokens at end of input"
-            )));
+            return Err(Error::QuerySyntaxError(
+                "Unexpected tokens at end of input".to_string(),
+            ));
         }
         Ok(expr)
     }
@@ -451,10 +451,9 @@ fn lex_tag(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
 }
 
 fn lex(input: &str) -> Result<Vec<Token>> {
-    let mut stream = CharStream::new(input);
-
     use self::TokenKind::*;
 
+    let mut stream = CharStream::new(input);
     let mut tokens = Vec::new();
     while !stream.is_at_end() {
         let position = stream.position();
