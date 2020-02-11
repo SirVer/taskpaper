@@ -11,10 +11,10 @@ return {
       redirect_stderr = "/tmp/cargo.err",
       commands = {
          -- Clippy does not report anything after cargo check
-         -- {
-            -- name = "Running cargo check",
-            -- command = "cargo check " .. PACKAGE .. " --color=always",
-         -- },
+         {
+            name = "Running cargo check",
+            command = "cargo check " .. PACKAGE .. " --color=always",
+         },
          {
             name = "Running cargo test [debug]",
             command = "cargo test " .. PACKAGE .. " --color=always",
@@ -23,10 +23,10 @@ return {
             name = "Running cargo build [debug]",
             command = "cargo build " .. PACKAGE .. " --color=always",
          },
-         {
-            name = "Running cargo clippy: ",
-            command = "cargo clippy " .. PACKAGE .. " --color=always", 
-         },
+         -- {
+            -- name = "Running cargo clippy: ",
+            -- command = "cargo clippy " .. PACKAGE .. " --color=always", 
+         -- },
       }
    },
    {

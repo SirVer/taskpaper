@@ -32,7 +32,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
             let mut cur = Some(&source_node_id);
             while let Some(id) = cur {
                 let node = &todo[id];
-                texts.push(node.item().text().clone());
+                texts.push(node.item().text());
                 cur = node.parent();
             }
             texts.reverse();

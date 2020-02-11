@@ -27,7 +27,7 @@ pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()
     let mut input = TaskpaperFile::parse_file(&args.input)?;
     for mut node in &mut input {
         for t in &args.tags {
-            node.item_mut().tags_mut().remove(t.trim_start_matches("@"));
+            node.item_mut().tags_mut().remove(t.trim_start_matches('@'));
         }
     }
 

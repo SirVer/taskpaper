@@ -113,15 +113,12 @@ pub fn parse_and_push_task(
     let (mut line_without_tags, tags) = tag::extract_tags(line_with_tags);
 
     if !verbatim {
-        match crate::check_feeds::get_summary_blocking(&line_without_tags) {
-            Ok(Some(summary)) => {
-                note_text.extend(summary.note_text.into_iter());
-                line_without_tags = summary.title;
-            }
-            _ => (),
+        if let Ok(Some(summary)) = crate::check_feeds::get_summary_blocking(&line_without_tags) {
+            note_text.extend(summary.note_text.into_iter());
+            line_without_tags = summary.title;
         }
 
-        if line_without_tags.starts_with(".") || line_without_tags.starts_with(",") {
+        if line_without_tags.starts_with('.') || line_without_tags.starts_with(',') {
             let clipboard = get_clipboard(line_without_tags.chars().next().unwrap())?;
             line_without_tags = line_without_tags[1..].trim().to_string();
             note_text.push(clipboard.trim().to_string());
@@ -174,19 +171,22 @@ pub fn to_inbox(
     };
 
     let node_id;
-    let position = if let Some(p) = &args.project {
-        node_id =
-            find_project(&tpf, p).ok_or_else(|| anyhow!("Could not find project '{}'.", p))?;
-        if args.prepend {
-            taskpaper::Position::AsFirstChildOf(&node_id)
-        } else {
-            taskpaper::Position::AsLastChildOf(&node_id)
+    let position = match &args.project {
+        Some(p) => {
+            node_id =
+                find_project(&tpf, p).ok_or_else(|| anyhow!("Could not find project '{}'.", p))?;
+            if args.prepend {
+                taskpaper::Position::AsFirstChildOf(&node_id)
+            } else {
+                taskpaper::Position::AsLastChildOf(&node_id)
+            }
         }
-    } else {
-        if args.prepend {
-            taskpaper::Position::AsFirst
-        } else {
-            taskpaper::Position::AsLast
+        None => {
+            if args.prepend {
+                taskpaper::Position::AsFirst
+            } else {
+                taskpaper::Position::AsLast
+            }
         }
     };
 

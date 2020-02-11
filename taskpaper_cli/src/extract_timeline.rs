@@ -27,7 +27,7 @@ pub fn extract_timeline(
         if due < today {
             due = today.pred();
         }
-        sorted.entry(due).or_insert(Vec::new()).push(item);
+        sorted.entry(due).or_insert_with(Vec::new).push(item);
     }
 
     for (due, due_items) in sorted {

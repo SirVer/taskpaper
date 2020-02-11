@@ -128,26 +128,25 @@ async fn get_summary(client: &reqwest::Client, url: &str) -> Result<Option<TaskI
 
     let mut title_text_lines = Vec::new();
     // Find and push the title.
-    soup.tag("title").find().map(|node| {
+    if let Some(node) = soup.tag("title").find() {
         let text = node.text().trim().to_string();
         if !text.is_empty() {
             title_text_lines.push(text);
         }
-    });
+    };
     let mut extra_notes = Vec::new();
     // Find and push the description.
-    soup.tag("meta")
-        .attr("name", "description")
-        .find()
-        .map(|node| {
-            node.attrs().get("content").map(|t| match t.len() {
+    if let Some(node) = soup.tag("meta").attr("name", "description").find() {
+        if let Some(t) = node.attrs().get("content") {
+            match t.len() {
                 0 => (),
                 1..=100 => title_text_lines.push(t.to_string()),
                 _ => {
                     extra_notes.extend(textwrap::wrap(t, 80).into_iter().map(|l| l.to_string()));
                 }
-            });
-        });
+            }
+        }
+    };
     if title_text_lines.is_empty() {
         return Ok(None);
     }
@@ -232,11 +231,11 @@ async fn read_feeds(
                             continue;
                         }
                         let published = parse_date(item.pub_date());
-                        let content = item.content().or(item.description()).unwrap_or("");
+                        let content = item.content().or_else(|| item.description()).unwrap_or("");
                         let guid = item
                             .guid()
                             .map(|g| g.value())
-                            .unwrap_or(url.unwrap())
+                            .unwrap_or_else(|| url.unwrap())
                             .to_string();
                         {
                             let seen_ids = seen_ids_ref.lock().unwrap();
@@ -278,7 +277,7 @@ async fn read_feeds(
                             entry
                                 .content()
                                 .and_then(|v| v.value())
-                                .or(entry.summary())
+                                .or_else(|| entry.summary())
                                 .unwrap_or("")
                         };
                         let guid = entry.id().to_string();

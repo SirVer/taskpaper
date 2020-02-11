@@ -42,8 +42,7 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
         .children
         .unwrap()
         .into_iter()
-        .filter(|c| c.title == Some("com.apple.ReadingList".to_string()))
-        .next()
+        .find(|c| c.title == Some("com.apple.ReadingList".to_string()))
         .unwrap();
 
     let mut tpf = if args.inbox {
@@ -95,7 +94,7 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
         }
     }
 
-    tpf.map(|tpf| {
+    if let Some(tpf) = tpf {
         db.overwrite_common_file(
             &tpf,
             taskpaper::CommonFileKind::Inbox,
@@ -106,10 +105,9 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
                     first_level: 0,
                     others: 0,
                 },
-                ..Default::default()
             },
         )
         .expect("Writing Inbox failed");
         println!("Wrote {} items into Inbox!", num_items);
-    });
+    };
 }

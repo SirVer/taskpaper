@@ -77,7 +77,7 @@ fn sanitize(item: &mut Item) {
     // Make sure the line does not contain a newline and does not end with ':'
     let mut text = item
         .text
-        .split("\n")
+        .split('\n')
         .map(|l| l.trim_end().trim_end_matches(':'))
         // TODO(sirver): this is not very accurate: if text is indended, we'd still want to remove
         // '- ' at the beginning of the content, but this is not happening here.
@@ -220,7 +220,7 @@ impl Item {
 
     pub fn line_index(&self) -> Option<usize> {
         // TODO(sirver): return by ref
-        self.line_index.clone()
+        self.line_index
     }
 
     pub fn text(&self) -> &str {
@@ -432,16 +432,16 @@ impl TaskpaperFile {
     }
 
     pub fn parse(input: &str) -> Result<Self> {
-        let lines = input
+        let mut it = input
             .trim()
             .lines()
             .enumerate()
-            .filter(|(_line_index, line)| !line.trim().is_empty());
+            .filter(|(_line_index, line)| !line.trim().is_empty())
+            .peekable();
 
         let mut nodes = Vec::new();
         let mut arena = Vec::new();
 
-        let mut it = lines.into_iter().peekable();
         while let Some(_) = it.peek() {
             nodes.push(parse_item(&mut it, &mut arena));
         }
