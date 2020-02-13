@@ -1,0 +1,24 @@
+Project:
+	- A task @foo @bar @nosort
+	- Another
+		Comment with trailing whitespace   
+	- Parent is Another
+		Regular comment
+	One more project:
+		This project is out of line and should be sorted
+
+		at the top.
+		The next empty line has enough indent to make siblings with the line before and after
+		
+		hellow
+		- This is a project
+	- Old
+				- Really overindented
+
+	- First again
+
+
+
+
+Second Project:
+	- Foo

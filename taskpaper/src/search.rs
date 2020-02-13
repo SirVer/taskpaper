@@ -370,7 +370,11 @@ impl CharStream {
 
     pub fn position(&self) -> usize {
         if self.is_at_end() {
-            self.indices[self.indices.len() - 1].0 + 1
+            if self.indices.is_empty() {
+                0
+            } else {
+                self.indices[self.indices.len() - 1].0 + 1
+            }
         } else {
             self.indices[self.current].0
         }
@@ -513,7 +517,6 @@ fn lex(input: &str) -> Result<Vec<Token>> {
 mod tests {
     use super::TokenKind::*;
     use super::*;
-    use pretty_assertions::assert_eq;
 
     fn tok(kind: TokenKind) -> Token {
         Token {

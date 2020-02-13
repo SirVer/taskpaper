@@ -95,19 +95,8 @@ pub fn dump_reading_list(db: &Database, args: &CommandLineArguments) {
     }
 
     if let Some(tpf) = tpf {
-        db.overwrite_common_file(
-            &tpf,
-            taskpaper::CommonFileKind::Inbox,
-            taskpaper::FormatOptions {
-                sort: taskpaper::Sort::Nothing,
-                empty_line_after_project: taskpaper::EmptyLineAfterProject {
-                    top_level: 0,
-                    first_level: 0,
-                    others: 0,
-                },
-            },
-        )
-        .expect("Writing Inbox failed");
+        db.overwrite_common_file(&tpf, taskpaper::CommonFileKind::Inbox)
+            .expect("Writing Inbox failed");
         println!("Wrote {} items into Inbox!", num_items);
     };
 }

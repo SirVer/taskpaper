@@ -28,13 +28,9 @@ pub struct FeedConfiguration {
 }
 
 #[derive(StructOpt, Debug)]
-pub struct CommandLineArguments {
-    /// Style to format with. The default is 'inbox'.
-    #[structopt(short = "-s", long = "--style", default_value = "inbox")]
-    style: String,
-}
+pub struct CommandLineArguments {}
 
-pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn run(db: &Database, _args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let mut rt = tokio::runtime::Runtime::new()?;
     let result: Result<Vec<TaskItem>> = rt.block_on(async {
         let client = reqwest::Client::builder().build()?;
@@ -57,11 +53,6 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
         Ok(rv)
     });
 
-    let style = match config.formats.get(&args.style) {
-        Some(format) => *format,
-        None => return Err(anyhow!("Style '{}' not found.", args.style)),
-    };
-
     let mut tags = taskpaper::Tags::new();
     tags.insert(taskpaper::Tag::new("reading".to_string(), None));
 
@@ -79,7 +70,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
             );
         }
     }
-    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox, style)?;
+    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox)?;
 
     Ok(())
 }
