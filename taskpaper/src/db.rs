@@ -1,3 +1,4 @@
+use crate::FormatOptions;
 use crate::{Result, TaskpaperFile};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -60,8 +61,16 @@ impl Database {
         TaskpaperFile::parse_file(kind.find(&self.root).expect("Common file not found!"))
     }
 
-    pub fn overwrite_common_file(&self, tpf: &TaskpaperFile, kind: CommonFileKind) -> Result<()> {
-        tpf.write(kind.find(&self.root).expect("Common file not found!"))
+    pub fn overwrite_common_file(
+        &self,
+        tpf: &TaskpaperFile,
+        kind: CommonFileKind,
+        options: FormatOptions,
+    ) -> Result<()> {
+        tpf.write(
+            kind.find(&self.root).expect("Common file not found!"),
+            options,
+        )
     }
 
     pub fn path_of_common_file(&self, kind: CommonFileKind) -> Option<PathBuf> {

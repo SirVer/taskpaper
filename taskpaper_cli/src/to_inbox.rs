@@ -1,3 +1,4 @@
+use crate::ConfigurationFile;
 use anyhow::{anyhow, Result};
 #[cfg(target_os = "macos")]
 use clipboard::{ClipboardContext, ClipboardProvider};
@@ -25,6 +26,10 @@ pub struct CommandLineArguments {
     /// Assume the input text is base64 encoded and decode it first.
     #[structopt(long = "--base64")]
     base64: bool,
+
+    /// Style to format with. The default is 'inbox'.
+    #[structopt(short = "-s", long = "--style", default_value = "inbox")]
+    style: String,
 
     /// The file to add this to. If not specified this is by default the inbox file.
     #[structopt(parse(from_os_str), short = "-f")]
@@ -149,7 +154,11 @@ fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
         .map(|n| n.id().clone())
 }
 
-pub fn to_inbox(db: &Database, args: &CommandLineArguments) -> Result<()> {
+pub fn to_inbox(
+    db: &Database,
+    args: &CommandLineArguments,
+    config: &ConfigurationFile,
+) -> Result<()> {
     let mut tpf = match &args.file {
         Some(f) => {
             if f.exists() {
@@ -181,6 +190,11 @@ pub fn to_inbox(db: &Database, args: &CommandLineArguments) -> Result<()> {
         }
     };
 
+    let style = match config.formats.get(&args.style) {
+        Some(format) => *format,
+        None => return Err(anyhow!("Style '{}' not found.", args.style)),
+    };
+
     let input: Vec<String> = if args.prompt {
         let reply = rprompt::prompt_reply_stdout("Task> ")?;
         vec![reply]
@@ -208,8 +222,8 @@ pub fn to_inbox(db: &Database, args: &CommandLineArguments) -> Result<()> {
     }
 
     match &args.file {
-        Some(f) => tpf.write(f)?,
-        None => db.overwrite_common_file(&tpf, taskpaper::CommonFileKind::Inbox)?,
+        Some(f) => tpf.write(f, style)?,
+        None => db.overwrite_common_file(&tpf, taskpaper::CommonFileKind::Inbox, style)?,
     };
     Ok(())
 }

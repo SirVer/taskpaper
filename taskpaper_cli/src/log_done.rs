@@ -184,12 +184,21 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
         &mut logbook,
     );
 
-    todo.format(config.formats["todo"]);
-    logbook.format(config.formats["logbook"]);
-
-    db.overwrite_common_file(&todo, taskpaper::CommonFileKind::Todo)?;
-    db.overwrite_common_file(&logbook, taskpaper::CommonFileKind::Logbook)?;
-    db.overwrite_common_file(&tickle, taskpaper::CommonFileKind::Tickle)?;
+    db.overwrite_common_file(
+        &todo,
+        taskpaper::CommonFileKind::Todo,
+        config.formats["todo"],
+    )?;
+    db.overwrite_common_file(
+        &logbook,
+        taskpaper::CommonFileKind::Logbook,
+        config.formats["logbook"],
+    )?;
+    db.overwrite_common_file(
+        &tickle,
+        taskpaper::CommonFileKind::Tickle,
+        config.formats["inbox"],
+    )?;
     Ok(())
 }
 

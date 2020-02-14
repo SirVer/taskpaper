@@ -48,6 +48,10 @@ pub fn extract_checkout(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
         }
     }
 
-    db.overwrite_common_file(&checkout, taskpaper::CommonFileKind::Checkout)?;
+    db.overwrite_common_file(
+        &checkout,
+        taskpaper::CommonFileKind::Checkout,
+        taskpaper::FormatOptions::default(),
+    )?;
     Ok(())
 }
