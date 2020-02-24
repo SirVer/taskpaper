@@ -30,17 +30,13 @@ main() {
             ;;
     esac
 
-    # This fetches latest stable release
-    local tag=$(git ls-remote --tags --refs --exit-code https://github.com/rust-embedded/cross \
-                       | cut -d/ -f3 \
-                       | grep -E '^v[0.1.0-9.]+$' \
-                       | $sort --version-sort \
-                       | tail -n1)
+    # We stick to realeas 0.1.16 of cross, since 0.2.0 has OpenSSL removed from
+    # its images.
     curl -LSfs https://japaric.github.io/trust/install.sh | \
         sh -s -- \
            --force \
            --git japaric/cross \
-           --tag $tag \
+           --tag 0.1.16 \
            --target $target
 }
 
