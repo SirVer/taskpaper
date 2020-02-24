@@ -35,8 +35,8 @@ main() {
     curl -LSfs https://japaric.github.io/trust/install.sh | \
         sh -s -- \
            --force \
-           --git japaric/cross \
-           --tag 0.1.16 \
+           --git rust-embedded/cross \
+           --tag "v0.1.16" \
            --target $target
 }
 
