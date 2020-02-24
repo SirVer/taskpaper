@@ -70,23 +70,15 @@ pub enum Error {
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
-// TODO(sirver): If the text is multiple lines, this should be split into multiple sibling items.
-// In the end, the invariant should hold that index of line == NodeId right after parsing.
-// TODO(sirver): This also could leave empty lines.
-fn sanitize(item: &mut Item) {
+/// Takes some 'text' in and returns a string that is valid for an item. This will turn all
+/// whitespace into space, remove trailing : and leading '- '.
+pub fn sanitize_item_text(text: &str) -> String {
     // Make sure the line does not contain a newline and does not end with ':'
-    let mut text = item
-        .text
-        .split('\n')
-        .map(|l| l.trim_end().trim_end_matches(':'))
-        // TODO(sirver): this is not very accurate: if text is indended, we'd still want to remove
-        // '- ' at the beginning of the content, but this is not happening here.
-        .map(|l| l.trim_end().trim_start_matches("- "))
-        .collect::<Vec<_>>()
-        .join("\n")
+    text.replace(|c| c == '\t' || c == '\n' || c == '\r', " ")
         .trim()
-        .to_string();
-    ::std::mem::swap(&mut item.text, &mut text);
+        .trim_end_matches(':')
+        .trim_start_matches("- ")
+        .to_string()
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -177,8 +169,16 @@ pub struct Item {
 
 impl Item {
     pub fn new(kind: ItemKind, text: String) -> Self {
-        assert!(text.find('\r').is_none());
-        assert!(text.find('\n').is_none());
+        assert!(
+            text.find('\r').is_none(),
+            "Item text {} contains '\\r'",
+            text
+        );
+        assert!(
+            text.find('\n').is_none(),
+            "Item text {} contains '\\n'",
+            text
+        );
 
         Item {
             kind,
@@ -452,8 +452,7 @@ impl TaskpaperFile {
         })
     }
 
-    fn register_item(&mut self, mut item: Item) -> NodeId {
-        sanitize(&mut item);
+    fn register_item(&mut self, item: Item) -> NodeId {
         self.arena.push(Node {
             parent: None,
             children: Vec::new(),

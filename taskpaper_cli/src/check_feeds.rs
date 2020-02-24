@@ -8,7 +8,7 @@ use std::fs;
 use std::io;
 use structopt::StructOpt;
 use syndication::Feed;
-use taskpaper::{Database, Position};
+use taskpaper::{sanitize_item_text, Database, Position};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
 
@@ -36,10 +36,20 @@ pub struct CommandLineArguments {
 
 pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let mut rt = tokio::runtime::Runtime::new()?;
+
+    let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
+    let mut seen_ids = match fs::read_to_string(&archive) {
+        Ok(data) => toml::from_str(&data)
+            .with_context(|| format!("Could not parse {}", archive.display()))?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => SeenIds::default(),
+        Err(e) => return Err(e.into()),
+    };
+
+    let seen_ids_ref = &seen_ids.seen_ids;
     let result: Result<Vec<TaskItem>> = rt.block_on(async {
         let client = reqwest::Client::builder().build()?;
 
-        let feeds = read_feeds(db, &client, &config.feeds).await?;
+        let feeds = read_feeds(&client, &config.feeds, seen_ids_ref).await?;
         let mut rv = Vec::new();
         for (feed, feed_config) in feeds.into_iter().zip(&config.feeds) {
             match feed {
@@ -50,12 +60,16 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
                         .into_iter()
                         .map(|l| l.to_string())
                         .collect(),
+                    guid: None,
                 }),
             }
         }
 
         Ok(rv)
     });
+    let result = result?;
+
+    let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
 
     let style = match config.formats.get(&args.style) {
         Some(format) => *format,
@@ -65,21 +79,28 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     let mut tags = taskpaper::Tags::new();
     tags.insert(taskpaper::Tag::new("reading".to_string(), None));
 
-    let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
-    for item in result? {
+    for item in result {
+        let text = sanitize_item_text(&item.title);
         let node_id = inbox.insert(
-            taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, item.title, tags.clone()),
+            taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, text, tags.clone()),
             Position::AsLast,
         );
 
         for line in item.note_text {
+            let text = sanitize_item_text(&line);
             inbox.insert(
-                taskpaper::Item::new(taskpaper::ItemKind::Note, line),
+                taskpaper::Item::new(taskpaper::ItemKind::Note, text),
                 Position::AsLastChildOf(&node_id),
             );
         }
+
+        if let Some(guid) = item.guid {
+            seen_ids.seen_ids.insert(guid);
+        }
     }
+
     db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox, style)?;
+    std::fs::write(&archive, toml::to_string_pretty(&seen_ids).unwrap())?;
 
     Ok(())
 }
@@ -94,6 +115,7 @@ struct SeenIds {
 pub struct TaskItem {
     pub title: String,
     pub note_text: Vec<String>,
+    pub guid: Option<String>,
 }
 
 fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
@@ -113,7 +135,7 @@ pub fn get_summary_blocking(url: &str) -> Result<Option<TaskItem>> {
     let mut rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let client = reqwest::Client::builder().build()?;
-        Ok(get_summary(&client, url).await?)
+        Ok(get_summary(&client, url, None).await?)
     })
 }
 
@@ -122,7 +144,11 @@ async fn get_page_body(client: &reqwest::Client, url: &str) -> Result<String> {
 }
 
 /// Turns a url into a TaskItem, suitable for use in the inbox.
-async fn get_summary(client: &reqwest::Client, url: &str) -> Result<Option<TaskItem>> {
+async fn get_summary(
+    client: &reqwest::Client,
+    url: &str,
+    guid: Option<String>,
+) -> Result<Option<TaskItem>> {
     let text = get_page_body(client, url).await?;
     let soup = Soup::new(&text);
 
@@ -156,6 +182,7 @@ async fn get_summary(client: &reqwest::Client, url: &str) -> Result<Option<TaskI
     Ok(Some(TaskItem {
         title: title_text_lines.join(" • "),
         note_text,
+        guid,
     }))
 }
 
@@ -166,9 +193,10 @@ async fn get_summary_or_current_information(
     title: String,
     content: String,
     published: Option<DateTime<Utc>>,
+    guid: Option<String>,
 ) -> Result<TaskItem> {
     let task = match feed_presentation {
-        FeedPresentation::FromWebsite => get_summary(client, url)
+        FeedPresentation::FromWebsite => get_summary(client, url, guid)
             .await?
             .expect("Did not receive a useful summary."),
         FeedPresentation::FromFeed => {
@@ -189,7 +217,11 @@ async fn get_summary_or_current_information(
                     _ => lines.into_iter().take(15),
                 });
             }
-            TaskItem { title, note_text }
+            TaskItem {
+                title,
+                note_text,
+                guid,
+            }
         }
     };
     Ok(task)
@@ -198,22 +230,11 @@ async fn get_summary_or_current_information(
 /// Returns a vector of same length then feeds, which contains either an Err if the feed could not
 /// be read or a list of items that we did not see before on any prior run.
 async fn read_feeds(
-    db: &Database,
     client: &reqwest::Client,
     feeds: &[FeedConfiguration],
+    seen_ids: &BTreeSet<String>,
 ) -> Result<Vec<Result<Vec<TaskItem>>>> {
-    let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
-    let seen_ids = match fs::read_to_string(&archive) {
-        Ok(data) => toml::from_str(&data)
-            .with_context(|| format!("Could not parse {}", archive.display()))?,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => SeenIds::default(),
-        Err(e) => return Err(e.into()),
-    };
-
-    let seen_ids = ::std::sync::Mutex::new(seen_ids);
-
     let mut futures = Vec::new();
-    let seen_ids_ref = &seen_ids;
     for feed in feeds {
         let presentation = feed.presentation.unwrap_or(FeedPresentation::FromWebsite);
 
@@ -237,11 +258,8 @@ async fn read_feeds(
                             .map(|g| g.value())
                             .unwrap_or_else(|| url.unwrap())
                             .to_string();
-                        {
-                            let seen_ids = seen_ids_ref.lock().unwrap();
-                            if seen_ids.seen_ids.contains(&guid) {
-                                continue;
-                            }
+                        if seen_ids.contains(&guid) {
+                            continue;
                         }
 
                         let title = item
@@ -256,13 +274,9 @@ async fn read_feeds(
                             title,
                             content.to_string(),
                             published,
+                            Some(guid),
                         )
                         .await?;
-
-                        {
-                            let mut seen_ids = seen_ids_ref.lock().unwrap();
-                            seen_ids.seen_ids.insert(guid);
-                        }
                         items.push(task);
                     }
                 }
@@ -281,11 +295,8 @@ async fn read_feeds(
                                 .unwrap_or("")
                         };
                         let guid = entry.id().to_string();
-                        {
-                            let seen_ids = seen_ids_ref.lock().unwrap();
-                            if seen_ids.seen_ids.contains(&guid) {
-                                continue;
-                            }
+                        if seen_ids.contains(&guid) {
+                            continue;
                         }
 
                         let published = parse_date(entry.published());
@@ -297,13 +308,9 @@ async fn read_feeds(
                             title,
                             content.to_string(),
                             published,
+                            Some(guid),
                         )
                         .await?;
-
-                        {
-                            let mut seen_ids = seen_ids_ref.lock().unwrap();
-                            seen_ids.seen_ids.insert(guid);
-                        }
                         items.push(task);
                     }
                 }
@@ -314,9 +321,5 @@ async fn read_feeds(
     }
 
     let rv = futures::future::join_all(futures).await;
-    std::fs::write(
-        &archive,
-        toml::to_string_pretty(&seen_ids.into_inner().unwrap()).unwrap(),
-    )?;
     Ok(rv)
 }
