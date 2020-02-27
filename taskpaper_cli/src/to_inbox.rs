@@ -7,7 +7,7 @@ use osascript::JavaScript;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{tag, Database, NodeId, TaskpaperFile};
+use taskpaper::{sanitize_item_text, tag, Database, NodeId, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -133,14 +133,16 @@ pub fn parse_and_push_task(
         }
     }
 
+    let text = sanitize_item_text(&line_without_tags);
     let node_id = tpf.insert(
-        taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, line_without_tags, tags),
+        taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, text, tags),
         position,
     );
 
     for line in note_text {
+        let text = sanitize_item_text(&line);
         tpf.insert(
-            taskpaper::Item::new(taskpaper::ItemKind::Note, line),
+            taskpaper::Item::new(taskpaper::ItemKind::Note, text),
             taskpaper::Position::AsLastChildOf(&node_id),
         );
     }
