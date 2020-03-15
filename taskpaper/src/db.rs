@@ -83,7 +83,6 @@ pub enum CommonFileKind {
     Inbox,
     Todo,
     Tickle,
-    Checkout,
     Logbook,
     Timeline,
 }
@@ -94,7 +93,6 @@ impl CommonFileKind {
             CommonFileKind::Inbox => root.join("01_inbox.taskpaper"),
             CommonFileKind::Todo => root.join("02_todo.taskpaper"),
             CommonFileKind::Tickle => root.join("03_tickle.taskpaper"),
-            CommonFileKind::Checkout => root.join("09_to_checkout.taskpaper"),
             CommonFileKind::Logbook => root.join("40_logbook.taskpaper"),
             CommonFileKind::Timeline => root.join("10_timeline.taskpaper"),
         };
@@ -111,7 +109,6 @@ impl CommonFileKind {
             CommonFileKind::Inbox => PathBuf::from("01_inbox.taskpaper"),
             CommonFileKind::Todo => PathBuf::from("02_todo.taskpaper"),
             CommonFileKind::Tickle => PathBuf::from("03_tickle.taskpaper"),
-            CommonFileKind::Checkout => PathBuf::from("09_to_checkout.taskpaper"),
             CommonFileKind::Logbook => PathBuf::from("40_logbook.taskpaper"),
             CommonFileKind::Timeline => PathBuf::from("10_timeline.taskpaper"),
         }

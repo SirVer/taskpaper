@@ -7,7 +7,6 @@ use taskpaper;
 mod check_feeds;
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
-mod extract_checkout;
 mod extract_timeline;
 mod filter;
 mod format;
