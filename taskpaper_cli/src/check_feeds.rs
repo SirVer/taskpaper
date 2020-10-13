@@ -174,7 +174,7 @@ async fn get_summary(
         }
     };
     if title_text_lines.is_empty() {
-        return Ok(None);
+        title_text_lines.push(url.to_string());
     }
     let mut note_text = Vec::new();
     note_text.push(url.to_string());
