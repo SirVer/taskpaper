@@ -135,7 +135,7 @@ fn append_repeated_items_to_tickle(
 
 pub fn parse_duration(s: &str) -> Result<chrono::Duration> {
     lazy_static! {
-        static ref DURATION: regex::Regex = { regex::Regex::new(r"(\d+)([dwmy])").unwrap() };
+        static ref DURATION: regex::Regex = regex::Regex::new(r"(\d+)([dwmy])").unwrap();
     };
 
     let captures = DURATION
