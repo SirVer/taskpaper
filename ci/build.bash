@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Script for building your rust projects.
-set -e
+set -ex
 
 source ci/common.bash
 
