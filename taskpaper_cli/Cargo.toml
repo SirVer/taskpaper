@@ -2,7 +2,7 @@
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 edition = "2018"
 name = "taskpaper_cli"
-version = "0.21.2"
+version = "0.21.3"
 
 [[bin]]
 name = "taskpaper"
@@ -20,7 +20,7 @@ lazy_static = "1.2.0"
 regex = "1.0.6"
 reqwest = { version = "0.11.3", default-features = false, features = ["blocking", "rustls"] }
 rprompt = "1.0.3"
-self_update = { version = "0.27.0", default-features = false, features = ["rustls"] }
+self_update = { version = "0.27.0", default-features = false, features = ["rustls", "archive-tar"] }
 serde = { version = "1.0.102", features = [ "derive" ] }
 shellexpand = "1.0.0"
 soup = "0.4.1"
