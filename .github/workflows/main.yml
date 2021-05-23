@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
         with:
-          depth: 50
+          fetch-depth: 5
       - uses: XAMPPRocky/get-github-release@v1
         id: cross
         with:
@@ -38,11 +38,6 @@ jobs:
   macos:
     runs-on: macos-latest
     needs: install-cross
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          depth: 50
-
     strategy:
       fail-fast: true
       matrix:
@@ -50,6 +45,10 @@ jobs:
         target:
           # Maybe add the new apple arm stuff here?
           - x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
       - uses: actions/download-artifact@v1
         with:
           name: cross-apple-darwin
@@ -77,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          depth: 50
+          fetch-depth: 5
 
       - name: Download Cross
         uses: actions/download-artifact@v1
