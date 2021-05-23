@@ -1,7 +1,13 @@
 # Based on XAMPPRocky/mean-bean-ci-template#6de00a4
 name: Mean Bean CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   # This job downloads and stores `cross` as an artifact, so that it can be
