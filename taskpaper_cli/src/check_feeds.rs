@@ -25,6 +25,7 @@ enum FeedPresentation {
 pub struct FeedConfiguration {
     url: String,
     presentation: Option<FeedPresentation>,
+    tags: Option<Vec<String>>,
 }
 
 #[derive(StructOpt, Debug)]
@@ -35,7 +36,7 @@ pub struct CommandLineArguments {
 }
 
 pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
-    let mut rt = tokio::runtime::Runtime::new()?;
+    let rt = tokio::runtime::Runtime::new()?;
 
     let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
     let mut seen_ids = match fs::read_to_string(&archive) {
@@ -61,6 +62,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
                         .map(|l| l.to_string())
                         .collect(),
                     guid: None,
+                    tags: Vec::new(),
                 }),
             }
         }
@@ -80,7 +82,11 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     tags.insert(taskpaper::Tag::new("reading".to_string(), None));
 
     for item in result {
-        let text = sanitize_item_text(&item.title);
+        let mut text = sanitize_item_text(&item.title);
+        for tag in item.tags {
+            text.push(' ');
+            text.extend(tag.chars());
+        }
         let node_id = inbox.insert(
             taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, text, tags.clone()),
             Position::AsLast,
@@ -116,6 +122,7 @@ pub struct TaskItem {
     pub title: String,
     pub note_text: Vec<String>,
     pub guid: Option<String>,
+    pub tags: Vec<String>,
 }
 
 fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
@@ -132,7 +139,7 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
 }
 
 pub fn get_summary_blocking(url: &str) -> Result<Option<TaskItem>> {
-    let mut rt = tokio::runtime::Runtime::new()?;
+    let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let client = reqwest::Client::builder().build()?;
         Ok(get_summary(&client, url, None).await?)
@@ -183,6 +190,7 @@ async fn get_summary(
         title: title_text_lines.join(" • "),
         note_text,
         guid,
+        tags: Vec::new(),
     }))
 }
 
@@ -221,6 +229,7 @@ async fn get_summary_or_current_information(
                 title,
                 note_text,
                 guid,
+                tags: Vec::new(),
             }
         }
     };
@@ -267,7 +276,7 @@ async fn read_feeds(
                             .unwrap_or_else(|| "No Title")
                             .trim()
                             .to_string();
-                        let task = get_summary_or_current_information(
+                        let mut task = get_summary_or_current_information(
                             client,
                             presentation,
                             url.unwrap(),
@@ -277,6 +286,9 @@ async fn read_feeds(
                             Some(guid),
                         )
                         .await?;
+                        if let Some(tags) = &feed.tags {
+                            task.tags.extend(tags.iter().cloned());
+                        }
                         items.push(task);
                     }
                 }
@@ -301,7 +313,7 @@ async fn read_feeds(
 
                         let published = parse_date(entry.published());
                         let title = entry.title().trim().to_string();
-                        let task = get_summary_or_current_information(
+                        let mut task = get_summary_or_current_information(
                             client,
                             presentation,
                             urls.first().unwrap(),
@@ -311,6 +323,9 @@ async fn read_feeds(
                             Some(guid),
                         )
                         .await?;
+                        if let Some(tags) = &feed.tags {
+                            task.tags.extend(tags.iter().cloned());
+                        }
                         items.push(task);
                     }
                 }

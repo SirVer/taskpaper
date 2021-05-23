@@ -2,7 +2,7 @@
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 edition = "2018"
 name = "taskpaper_cli"
-version = "0.21.5"
+version = "0.21.6"
 
 [[bin]]
 name = "taskpaper"
@@ -28,7 +28,7 @@ structopt = "0.3.3"
 syndication = "0.5.0"
 taskpaper = { path = "../taskpaper" }
 textwrap = "0.11.0"
-tokio = "0.2.0-alpha.6"
+tokio = "1.6"
 toml = "0.5.5"
 
 [target."cfg(target_os = \"macos\")".dependencies]
