@@ -18,5 +18,5 @@ if [ -z "$RELEASE_BUILD" ]; then
     $CROSS build --all --target $TARGET_TRIPLE
     $CROSS build --all --target $TARGET_TRIPLE --all-features
 else
-    $CROSS build --all --target $TARGET_TRIPLE --all-features --release
+    $CROSS build -p taskpaper_cli --target $TARGET_TRIPLE --release
 fi
