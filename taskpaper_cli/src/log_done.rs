@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::cmp;
 use structopt::StructOpt;
-use taskpaper::{Database, Item, NodeId, Position, Tag, TaskpaperFile};
+use taskpaper::{ChildrenStrategy, Database, Item, NodeId, Position, Tag, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {}
@@ -40,7 +40,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
         };
         item.text = new_text;
 
-        todo.unlink_node(source_node_id);
+        todo.unlink_node(source_node_id, ChildrenStrategy::Remove);
 
         // Find the name of the parent project in the logbook.
         let parent_project = {
@@ -71,7 +71,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
             match NaiveDate::parse_from_str(&node.item().text(), "%A, %d. %B %Y") {
                 Ok(v) => v,
                 Err(_) => panic!(
-                    "Encountered unexpected date formatting: {}",
+                    "Encountered unexpected date formatting: '{}'",
                     node.item().text()
                 ),
             },
