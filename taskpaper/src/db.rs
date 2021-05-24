@@ -1,5 +1,5 @@
-use crate::FormatOptions;
 use crate::{Result, TaskpaperFile};
+use log::warn;
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -31,7 +31,7 @@ impl Database {
             }
             let file = TaskpaperFile::parse_file(path);
             if file.is_err() {
-                println!("Skipping {:?} due to parsing errors.", path);
+                warn!("Skipping {:?} due to parsing errors.", path);
                 continue;
             }
             let relative_path = entry.path().strip_prefix(&self.root).unwrap().to_path_buf();
@@ -61,16 +61,8 @@ impl Database {
         TaskpaperFile::parse_file(kind.find(&self.root).expect("Common file not found!"))
     }
 
-    pub fn overwrite_common_file(
-        &self,
-        tpf: &TaskpaperFile,
-        kind: CommonFileKind,
-        options: FormatOptions,
-    ) -> Result<()> {
-        tpf.write(
-            kind.find(&self.root).expect("Common file not found!"),
-            options,
-        )
+    pub fn overwrite_common_file(&self, tpf: &TaskpaperFile, kind: CommonFileKind) -> Result<()> {
+        tpf.write(kind.find(&self.root).expect("Common file not found!"))
     }
 
     pub fn path_of_common_file(&self, kind: CommonFileKind) -> Option<PathBuf> {
@@ -83,6 +75,7 @@ pub enum CommonFileKind {
     Inbox,
     Todo,
     Tickle,
+    Checkout,
     Logbook,
     Timeline,
 }
@@ -93,6 +86,7 @@ impl CommonFileKind {
             CommonFileKind::Inbox => root.join("01_inbox.taskpaper"),
             CommonFileKind::Todo => root.join("02_todo.taskpaper"),
             CommonFileKind::Tickle => root.join("03_tickle.taskpaper"),
+            CommonFileKind::Checkout => root.join("09_to_checkout.taskpaper"),
             CommonFileKind::Logbook => root.join("40_logbook.taskpaper"),
             CommonFileKind::Timeline => root.join("10_timeline.taskpaper"),
         };
@@ -109,6 +103,7 @@ impl CommonFileKind {
             CommonFileKind::Inbox => PathBuf::from("01_inbox.taskpaper"),
             CommonFileKind::Todo => PathBuf::from("02_todo.taskpaper"),
             CommonFileKind::Tickle => PathBuf::from("03_tickle.taskpaper"),
+            CommonFileKind::Checkout => PathBuf::from("09_to_checkout.taskpaper"),
             CommonFileKind::Logbook => PathBuf::from("40_logbook.taskpaper"),
             CommonFileKind::Timeline => PathBuf::from("10_timeline.taskpaper"),
         }

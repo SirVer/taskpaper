@@ -32,7 +32,8 @@ pub fn format(args: &CommandLineArguments, config: &ConfigurationFile) -> Result
         },
     };
 
-    let taskpaper_file = TaskpaperFile::parse_file(&args.input)?;
-    taskpaper_file.write(&args.input, style)?;
+    let mut taskpaper_file = TaskpaperFile::parse_file(&args.input)?;
+    taskpaper_file.format(style);
+    taskpaper_file.write(&args.input)?;
     Ok(())
 }

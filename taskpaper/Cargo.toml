@@ -17,6 +17,3 @@ tempdir = "0.3.7"
 thiserror = "1"
 walkdir = "2.2.5"
 log = "0.4.8"
-
-[dev-dependencies]
-pretty_assertions = "0.7.2"

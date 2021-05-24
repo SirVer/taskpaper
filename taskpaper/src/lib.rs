@@ -10,9 +10,8 @@ pub use crate::tag::{Tag, Tags};
 pub use db::{CommonFileKind, Database};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::cmp;
 use std::collections::VecDeque;
-use std::fmt::{self, Write};
+use std::fmt::Write;
 use std::io;
 use std::iter::Peekable;
 use std::mem;
@@ -81,6 +80,25 @@ pub fn sanitize_item_text(text: &str) -> String {
         .to_string()
 }
 
+// TODO(sirver): If the text is multiple lines, this should be split into multiple sibling items.
+// In the end, the invariant should hold that index of line == NodeId right after parsing.
+// TODO(sirver): This also could leave empty lines.
+fn sanitize(item: &mut Item) {
+    // Make sure the line does not contain a newline and does not end with ':'
+    let mut text = item
+        .text
+        .split('\n')
+        .map(|l| l.trim_end().trim_end_matches(':'))
+        // TODO(sirver): this is not very accurate: if text is indended, we'd still want to remove
+        // '- ' at the beginning of the content, but this is not happening here.
+        .map(|l| l.trim_end().trim_start_matches("- "))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string();
+    ::std::mem::swap(&mut item.text, &mut text);
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Sort {
     // Do not change ordering of the items, print them as they arrive.
@@ -117,8 +135,7 @@ impl Default for FormatOptions {
     }
 }
 
-fn append_project_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::Result {
-    let indent_str = "\t".repeat(indent);
+fn append_project_to_string(item: &Item, buf: &mut String) {
     let mut tags = item.tags.iter().map(|t| t.to_string()).collect::<Vec<_>>();
     tags.sort();
     let tags_string = if tags.is_empty() {
@@ -126,17 +143,11 @@ fn append_project_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt
     } else {
         format!(" {}", tags.join(" "))
     };
-    writeln!(buf, "{}{}:{}", indent_str, item.text, tags_string)?;
-
-    Ok(())
+    write!(buf, "{}:{}", item.text, tags_string).expect("Writing to a string should never fail.");
 }
 
-fn append_note_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::Result {
-    let indent = "\t".repeat(indent);
-    for line in item.text.split_terminator('\n') {
-        writeln!(buf, "{}{}", indent, line)?;
-    }
-    Ok(())
+fn append_note_to_string(item: &Item, buf: &mut String) {
+    write!(buf, "{}", item.text).expect("Writing to string should never fail.");
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -236,8 +247,7 @@ impl Item {
     }
 }
 
-fn append_task_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::Result {
-    let indent_str = "\t".repeat(indent);
+fn append_task_to_string(item: &Item, buf: &mut String) {
     let mut tags = item.tags.iter().collect::<Vec<Tag>>();
     tags.sort_by_key(|t| (t.value.is_some(), t.name.clone()));
     let tags_string = if tags.is_empty() {
@@ -246,61 +256,7 @@ fn append_task_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::R
         let tag_strings = tags.iter().map(|t| t.to_string()).collect::<Vec<String>>();
         format!(" {}", tag_strings.join(" "))
     };
-    writeln!(buf, "{}- {}{}", indent_str, item.text, tags_string)?;
-    Ok(())
-}
-
-fn print_nodes(
-    mut node_ids: Vec<NodeId>,
-    arena: &[Node],
-    buf: &mut String,
-    indent: usize,
-    options: FormatOptions,
-) -> fmt::Result {
-    // Projects are bubbled to the top.
-    match options.sort {
-        Sort::Nothing => (),
-        Sort::ProjectsFirst => node_ids.sort_by_key(|id| !arena[id.0].item.is_project()),
-    }
-
-    let maybe_empty_line = |buf: &mut String, idx: usize| -> fmt::Result {
-        // Only if there is a next item and that is a project do we actually print a new line.
-        if let Some(id) = node_ids.get(idx + 1) {
-            if arena[id.0].item.is_project() {
-                writeln!(buf)?;
-            }
-        }
-        Ok(())
-    };
-
-    for (idx, id) in node_ids.iter().enumerate() {
-        let node = &arena[id.0];
-        let add_empty_line = match &node.item.kind {
-            ItemKind::Project => {
-                append_project_to_string(&node.item, buf, indent)?;
-                match indent {
-                    0 => options.empty_line_after_project.top_level,
-                    1 => options.empty_line_after_project.first_level,
-                    _ => options.empty_line_after_project.others,
-                }
-            }
-            ItemKind::Task => {
-                append_task_to_string(&node.item, buf, indent)?;
-                0
-            }
-            ItemKind::Note => {
-                append_note_to_string(&node.item, buf, indent)?;
-                0
-            }
-        };
-
-        print_nodes(node.children.clone(), arena, buf, indent + 1, options)?;
-
-        for _ in 0..add_empty_line {
-            maybe_empty_line(buf, idx)?;
-        }
-    }
-    Ok(())
+    write!(buf, "- {}{}", item.text, tags_string).expect("Writing to string should never fail.");
 }
 
 // This is the same as ItemKind at the moment, but I believe dealing with empty lines is easier if
@@ -435,13 +391,7 @@ impl TaskpaperFile {
     }
 
     pub fn parse(input: &str) -> Result<Self> {
-        // TODO(sirver): Swift does not filter empty line and that feels more correct.
-        let mut it = input
-            .trim()
-            .lines()
-            .enumerate()
-            .filter(|(_line_index, line)| !line.trim().is_empty())
-            .peekable();
+        let mut it = input.trim().lines().enumerate().peekable();
 
         let mut nodes = Vec::new();
         let mut arena = Vec::new();
@@ -456,7 +406,8 @@ impl TaskpaperFile {
         })
     }
 
-    fn register_item(&mut self, item: Item) -> NodeId {
+    fn register_item(&mut self, mut item: Item) -> NodeId {
+        sanitize(&mut item);
         self.arena.push(Node {
             parent: None,
             children: Vec::new(),
@@ -482,76 +433,153 @@ impl TaskpaperFile {
     }
 
     pub fn insert_node(&mut self, node_id: NodeId, position: Position) {
-        // Ensure that the indentation of the child is at least the parent + 1.
-        let ensure_indent_larger_then_parent = |arena: &mut [Node], parent_id: &NodeId| {
-            let indent = cmp::max(
-                arena[parent_id.0].item().indent + 1,
-                arena[node_id.0].item().indent,
-            );
-            arena[node_id.0].item_mut().indent = indent;
-        };
-
-        match position {
+        let min_indent = match position {
             Position::AsFirst => {
                 self.arena[node_id.0].parent = None;
-                self.nodes.insert(0, node_id);
+                self.nodes.insert(0, node_id.clone());
+                0
             }
-            // NOCOM(#sirver): does clippy catch this?
             Position::AsLast => {
                 self.arena[node_id.0].parent = None;
                 self.nodes.push(node_id.clone());
+                0
             }
             Position::AsFirstChildOf(parent_id) => {
-                ensure_indent_larger_then_parent(&mut self.arena, parent_id);
                 self.arena[node_id.0].parent = Some(parent_id.clone());
-                self.arena[parent_id.0].children.insert(0, node_id)
+                self.arena[parent_id.0].children.insert(0, node_id.clone());
+                self.arena[parent_id.0].item().indent + 1
             }
             Position::AsLastChildOf(parent_id) => {
-                ensure_indent_larger_then_parent(&mut self.arena, parent_id);
                 self.arena[node_id.0].parent = Some(parent_id.clone());
-                self.arena[parent_id.0].children.push(node_id)
+                self.arena[parent_id.0].children.push(node_id.clone());
+                self.arena[parent_id.0].item().indent + 1
             }
             Position::After(sibling_id) => {
-                let parent_id = self.arena[sibling_id.0].parent.clone().expect(
-                    "Passing Position::After with a node that has no parent is unexpected.",
-                );
-                ensure_indent_larger_then_parent(&mut self.arena, &parent_id);
-                self.arena[node_id.0].parent = Some(parent_id.clone());
-                let parent_node = &mut self.arena[parent_id.0];
-                let position = parent_node
-                    .children
+                let parent_id = self.arena[sibling_id.0].parent.clone();
+                let (indent, vec) = match parent_id {
+                    Some(parent_id) => {
+                        self.arena[node_id.0].parent = Some(parent_id.clone());
+                        (
+                            self.arena[parent_id.0].item().indent + 1,
+                            &mut self.arena[parent_id.0].children,
+                        )
+                    }
+                    None => {
+                        self.arena[node_id.0].parent = None;
+                        (0, &mut self.nodes)
+                    }
+                };
+                let position = vec
                     .iter()
                     .position(|id| *id == *sibling_id)
                     .expect("Sibling not actually a child of parent.");
-                parent_node.children.insert(position + 1, node_id);
+                vec.insert(position + 1, node_id.clone());
+                indent
             }
         };
+
+        // Ensure that the indentation of the new node is appropriate
+        let delta = min_indent - self.arena[node_id.0].item().indent;
+        if delta > 0 {
+            // The whole subtree under this node needs to be moved for this.
+            for mut entry in self.iter_node_mut(&node_id) {
+                entry.item_mut().indent += delta;
+            }
+        }
     }
 
-    pub fn to_string(&self, options: FormatOptions) -> String {
+    // TODO(sirver): Implement the ToString trait instead.
+    pub fn to_string(&self) -> String {
         let mut buf = String::new();
-        print_nodes(self.nodes.clone(), &self.arena, &mut buf, 0, options)
-            .expect("Formatting should never fail.");
+        for entry in self.iter() {
+            let item = entry.item();
+            write!(buf, "{}", "\t".repeat(item.indent as usize))
+                .expect("Writing to buf should never fail.");
+            match &item.kind {
+                ItemKind::Project => append_project_to_string(&item, &mut buf),
+                ItemKind::Task => append_task_to_string(&item, &mut buf),
+                ItemKind::Note => append_note_to_string(&item, &mut buf),
+            }
+            write!(buf, "\n").expect("Writing to buf should never fail.");
+        }
         buf
     }
 
+    /// Returns the string representation of a single node id, not including any of its children
+    /// and not taking its indentation into account.
+    /// TODO(sirver): This could be a method on item which would make a tad more sense.
     pub fn node_to_string(&self, node_id: &NodeId) -> String {
         let mut buf = String::new();
         let item = self.arena[node_id.0].item();
         match &item.kind {
-            ItemKind::Project => append_project_to_string(item, &mut buf, 0)
-                .expect("Writing to string should always work."),
-            ItemKind::Task => append_task_to_string(item, &mut buf, 0)
-                .expect("Writing to string should always work."),
-            ItemKind::Note => append_note_to_string(item, &mut buf, 0)
-                .expect("Writing to string should always work."),
+            ItemKind::Project => append_project_to_string(item, &mut buf),
+            ItemKind::Task => append_task_to_string(item, &mut buf),
+            ItemKind::Note => append_note_to_string(item, &mut buf),
         };
         buf
     }
 
-    pub fn write(&self, path: impl AsRef<Path>, options: FormatOptions) -> Result<()> {
-        let new = self.to_string(options);
+    /// Format this file according to rules.
+    pub fn format(&mut self, options: FormatOptions) {
+        fn recurse(
+            node_ids: &mut [NodeId],
+            arena: &mut [Node],
+            options: FormatOptions,
+            lines_to_add: &mut Vec<(NodeId, usize)>,
+        ) {
+            // Projects are bubbled to the top.
+            match options.sort {
+                Sort::Nothing => (),
+                Sort::ProjectsFirst => node_ids.sort_by_key(|id| !arena[id.0].item.is_project()),
+            }
 
+            for (idx, id) in node_ids.iter().enumerate() {
+                let add_empty_line = match &arena[id.0].item.kind {
+                    ItemKind::Project => match arena[id.0].item.indent {
+                        0 => options.empty_line_after_project.top_level,
+                        1 => options.empty_line_after_project.first_level,
+                        _ => options.empty_line_after_project.others,
+                    },
+                    ItemKind::Task | ItemKind::Note => 0,
+                };
+
+                // Only if there is a next item and that is a project do we actually print a new line.
+                if let Some(id) = node_ids.get(idx + 1) {
+                    if arena[id.0].item.is_project() {
+                        lines_to_add.push((node_ids[idx].clone(), add_empty_line));
+                    }
+                }
+
+                let mut children = ::std::mem::take(&mut arena[id.0].children);
+                recurse(&mut children, arena, options, lines_to_add);
+                arena[id.0].children = children;
+            }
+        }
+
+        let mut lines_to_add = Vec::new();
+
+        // Remove empty lines between top level items.
+        let mut nodes = ::std::mem::take(&mut self.nodes);
+        nodes.retain(|id| match self.arena[id.0].item.kind {
+            ItemKind::Project | ItemKind::Task => true,
+            ItemKind::Note => !self.arena[id.0].item.text.trim().is_empty(),
+        });
+        self.nodes = nodes;
+
+        recurse(&mut self.nodes, &mut self.arena, options, &mut lines_to_add);
+
+        for (node_id, count) in lines_to_add {
+            for _ in 0..count {
+                self.insert(
+                    Item::new(ItemKind::Note, "".to_string()),
+                    Position::After(&node_id),
+                );
+            }
+        }
+    }
+
+    pub fn write(&self, path: impl AsRef<Path>) -> Result<()> {
+        let new = self.to_string();
         let has_changed = match std::fs::read_to_string(&path) {
             Err(_) => true,
             Ok(old) => sha1::Sha1::from(&old) != sha1::Sha1::from(&new),
@@ -609,24 +637,34 @@ impl TaskpaperFile {
     }
 
     /// Copy the node with 'source_id' from 'source' into us, including its entry and all sub
-    /// nodes. Does not link it into the file tree, this needs to be done later manually.
+    /// nodes. It keeps the realtive indentation inside the tree, but the top level node is
+    /// indented to 0. Does not link it into the file tree, this needs to be done later
+    /// manually.
     pub fn copy_node(&mut self, source: &TaskpaperFile, source_id: &NodeId) -> NodeId {
-        fn recurse(arena: &mut Vec<Node>, source: &TaskpaperFile, source_id: &NodeId) -> NodeId {
+        fn recurse(
+            arena: &mut Vec<Node>,
+            source: &TaskpaperFile,
+            source_id: &NodeId,
+            indent: u32,
+        ) -> NodeId {
             let id = NodeId(arena.len());
             let source_node = &source.arena[source_id.0];
-            arena.push(Node {
+            let mut node = Node {
                 parent: None,
                 item: source_node.item().clone(),
                 children: Vec::new(),
-            });
+            };
+            node.item.indent -= indent;
+            arena.push(node);
             let mut children = Vec::with_capacity(source_node.children.len());
             for child_id in &source_node.children {
-                children.push(recurse(arena, source, child_id));
+                children.push(recurse(arena, source, child_id, indent));
             }
             arena[id.0].children = children;
             id
         }
-        recurse(&mut self.arena, source, source_id)
+        let source_indent = source.arena[source_id.0].item.indent;
+        recurse(&mut self.arena, source, source_id, source_indent)
     }
 
     pub fn iter(&self) -> TaskpaperIter {
@@ -840,8 +878,12 @@ pub fn mirror_changes(
             &destination[&destination_id].item().kind,
         ) {
             (ItemKind::Project, ItemKind::Project) | (ItemKind::Task, ItemKind::Task) => {
-                // Copy the data of the changed item over.
-                *destination[&destination_id].item_mut() = source_node.item().clone();
+                // Copy the data of the changed item over, but retain its indent.
+                let indent = destination[&destination_id].item().indent;
+                *destination[&destination_id].item_mut() = Item {
+                    indent,
+                    ..source_node.item().clone()
+                };
             }
             _ => continue,
         };
@@ -878,7 +920,6 @@ pub fn mirror_changes(
 mod tests {
     use super::*;
     use crate::testing::*;
-    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_simple_task_parse() {
@@ -942,17 +983,34 @@ mod tests {
 
     #[test]
     fn test_parsing_roundtrip() {
-        let input = include_str!("tests/simple_project_canonical_formatting.taskpaper");
-        let tpf = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(input, tpf.to_string(FormatOptions::default()));
+        let path = "src/tests/simple_project_canonical_formatting.taskpaper";
+        let tpf = TaskpaperFile::parse_file(&path).unwrap();
+        assert_str_eq_to_golden("test_parsing_roundtrip", &path, &tpf.to_string());
+    }
+
+    #[test]
+    fn test_no_reformatting_roundtrip() {
+        // While we should not really touch a file on a roundtrip, currently we actually reorder
+        // tags alphabetically and remove trailing whitespace in texts (but not in indentation).
+        // This test documents this.
+        let tpf =
+            TaskpaperFile::parse_file("src/tests/simple_project_no_formatting.taskpaper").unwrap();
+        assert_str_eq_to_golden(
+            "test_no_reformatting_roundtrip",
+            "src/tests/simple_project_no_formatting_what_we_really_do_though.taskpaper",
+            &tpf.to_string(),
+        );
     }
 
     #[test]
     fn test_reformatting_roundtrip() {
-        let input = include_str!("tests/simple_project.taskpaper");
-        let expected = include_str!("tests/simple_project_canonical_formatting.taskpaper");
-        let tpf = TaskpaperFile::parse(&input).unwrap();
-        assert_eq!(expected, tpf.to_string(FormatOptions::default()));
+        let mut tpf = TaskpaperFile::parse_file("src/tests/simple_project.taskpaper").unwrap();
+        tpf.format(FormatOptions::default());
+        assert_str_eq_to_golden(
+            "test_reformatting_roundtrip",
+            "src/tests/simple_project_canonical_formatting.taskpaper",
+            &tpf.to_string(),
+        );
     }
 
     #[test]
@@ -962,7 +1020,7 @@ mod tests {
         )
         .unwrap();
         let golden = "- Arbeit • Foo • blah @coding @next @blocked(arg prs) @done(2018-06-21)\n";
-        assert_eq!(golden, tpf.to_string(FormatOptions::default()));
+        assert_eq!(golden, tpf.to_string());
     }
 
     #[test]
@@ -979,7 +1037,7 @@ mod tests {
         let mut destination = TaskpaperFile::parse_file(&destination_path).unwrap();
         mirror_changes(&source, &mut destination).expect("Should work.");
         assert_eq!(
-            &destination.to_string(FormatOptions::default()),
+            &destination.to_string(),
             include_str!("tests/mirror_changes/destination.taskpaper"),
         );
     }
@@ -995,9 +1053,10 @@ mod tests {
             include_str!("tests/mirror_changes/source.taskpaper"),
         );
         mirror_changes(&source, &mut destination).expect("Should work");
-        assert_eq!(
-            &destination.to_string(FormatOptions::default()),
-            include_str!("tests/mirror_changes/destination_golden.taskpaper"),
+        assert_str_eq_to_golden(
+            "test_mirror_changes",
+            "src/tests/mirror_changes/destination_golden.taskpaper",
+            &destination.to_string(),
         );
     }
 }

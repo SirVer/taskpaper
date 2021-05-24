@@ -19,25 +19,16 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
     let mut tickle = db.parse_common_file(taskpaper::CommonFileKind::Tickle)?;
 
     crate::tickle::tickle(&mut inbox, &mut todo, &mut tickle)?;
+    crate::extract_checkout::extract_checkout(db, &mut todo)?;
     crate::extract_timeline::extract_timeline(db, &mut todo, config)?;
+
+    todo.format(config.formats["todo"]);
 
     // It is very important to first write todo.taskpaper, so that the extract methods that might
     // be run now on file change do not run into an infinite loop.
-    db.overwrite_common_file(
-        &todo,
-        taskpaper::CommonFileKind::Todo,
-        config.formats["todo"],
-    )?;
-    db.overwrite_common_file(
-        &inbox,
-        taskpaper::CommonFileKind::Inbox,
-        config.formats["inbox"],
-    )?;
-    db.overwrite_common_file(
-        &tickle,
-        taskpaper::CommonFileKind::Tickle,
-        config.formats["inbox"],
-    )?;
+    db.overwrite_common_file(&todo, taskpaper::CommonFileKind::Todo)?;
+    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox)?;
+    db.overwrite_common_file(&tickle, taskpaper::CommonFileKind::Tickle)?;
 
     Ok(())
 }

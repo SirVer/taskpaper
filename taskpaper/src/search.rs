@@ -321,9 +321,10 @@ impl Parser {
     }
 
     fn advance(&mut self) -> &Token {
-        if !self.is_at_end() {
-            self.current += 1;
+        if self.is_at_end() {
+            return self.peek();
         }
+        self.current += 1;
         self.previous()
     }
 
@@ -370,7 +371,11 @@ impl CharStream {
 
     pub fn position(&self) -> usize {
         if self.is_at_end() {
-            self.indices[self.indices.len() - 1].0 + 1
+            if self.indices.is_empty() {
+                0
+            } else {
+                self.indices[self.indices.len() - 1].0 + 1
+            }
         } else {
             self.indices[self.current].0
         }
@@ -513,7 +518,6 @@ fn lex(input: &str) -> Result<Vec<Token>> {
 mod tests {
     use super::TokenKind::*;
     use super::*;
-    use pretty_assertions::assert_eq;
 
     fn tok(kind: TokenKind) -> Token {
         Token {
@@ -668,6 +672,12 @@ mod tests {
                 .unwrap()
                 .evaluate(&tags)
         );
+    }
+
+    #[test]
+    fn test_empty_string() {
+        let expr = Expr::parse("");
+        assert!(expr.is_err());
     }
 
     #[test]

@@ -7,6 +7,7 @@ use taskpaper;
 mod check_feeds;
 #[cfg(target_os = "macos")]
 mod dump_reading_list;
+mod extract_checkout;
 mod extract_timeline;
 mod filter;
 mod format;
@@ -95,7 +96,7 @@ enum Command {
 
     /// Checks all configured RSS feeds and puts them into the Inbox.
     #[structopt(name = "check_feeds")]
-    CheckFeeds(check_feeds::CommandLineArguments),
+    CheckFeeds,
 }
 
 fn main() {
@@ -120,13 +121,13 @@ fn main() {
 
     match args.cmd {
         Some(Command::Search(args)) => search::search(&db, &args, &config).unwrap(),
-        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args, &config).unwrap(),
+        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args).unwrap(),
         Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
         Some(Command::Housekeeping(args)) => housekeeping::run(&db, &args, &config).unwrap(),
         Some(Command::LogDone(args)) => log_done::run(&db, &args, &config).unwrap(),
-        Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
-        Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
-        Some(Command::CheckFeeds(args)) => check_feeds::run(&db, &args, &config).unwrap(),
+        Some(Command::PurgeTags(args)) => purge_tags::run(&args).unwrap(),
+        Some(Command::Filter(args)) => filter::run(&args).unwrap(),
+        Some(Command::CheckFeeds) => check_feeds::run(&db, &config).unwrap(),
 
         #[cfg(target_os = "macos")]
         Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&db, &args),
