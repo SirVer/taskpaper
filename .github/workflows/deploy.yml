@@ -54,7 +54,10 @@ jobs:
       - run: ci/build.bash cross ${{ matrix.target }} RELEASE
       - run: find target/${{ matrix.target }}/release
       - run: file target/${{ matrix.target }}/release/taskpaper
-      - run: tar -czvf ${{ env.BIN }}.tar.gz --directory=target/${{ matrix.target }}/release ${{ env.BIN }}
+      - run: shasum target/${{ matrix.target }}/release/taskpaper
+      - run: cp target/${{ matrix.target }}/release/taskpaper /tmp
+      - run: shasum /tmp/taskpaper
+      - run: tar -czvf ${{ env.BIN }}.tar.gz --directory=/tmp ${{ env.BIN }}
       - uses: XAMPPRocky/create-release@v1.0.2
         id: create_release
         env:
