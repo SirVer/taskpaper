@@ -53,7 +53,10 @@ pub fn extract_timeline(
             timeline.insert(item.clone(), Position::AsLastChildOf(&project_id));
         }
     }
-    timeline.format(config.formats["timeline"]);
-    db.overwrite_common_file(&timeline, taskpaper::CommonFileKind::Timeline)?;
+    db.overwrite_common_file(
+        &timeline,
+        taskpaper::CommonFileKind::Timeline,
+        config.formats["timeline"],
+    )?;
     Ok(())
 }

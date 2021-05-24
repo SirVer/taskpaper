@@ -289,6 +289,7 @@ fn find_tags(s: &str) -> Vec<(Tag, (usize, usize))> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_find_first_tag() {

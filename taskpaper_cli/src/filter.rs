@@ -1,4 +1,5 @@
-use anyhow::Result;
+use crate::ConfigurationFile;
+use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use taskpaper::TaskpaperFile;
@@ -9,13 +10,22 @@ pub struct CommandLineArguments {
     #[structopt(parse(from_os_str), long = "--input", short = "-i")]
     input: PathBuf,
 
+    /// Style to format with. The default is 'default'.
+    #[structopt(short = "-s", long = "--style")]
+    style: String,
+
     /// Query of the items to delete.
     query: String,
 }
 
-pub fn run(args: &CommandLineArguments) -> Result<()> {
+pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+    let style = match config.formats.get(&args.style) {
+        Some(format) => *format,
+        None => return Err(anyhow!("Style '{}' not found.", args.style)),
+    };
+
     let mut input = TaskpaperFile::parse_file(&args.input)?;
     input.filter(&args.query)?;
-    input.write(&args.input)?;
+    input.write(&args.input, style)?;
     Ok(())
 }

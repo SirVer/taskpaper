@@ -6,6 +6,7 @@ use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::BTreeSet;
 use std::fs;
 use std::io;
+use structopt::StructOpt;
 use syndication::Feed;
 use taskpaper::{sanitize_item_text, Database, Position};
 
@@ -27,7 +28,14 @@ pub struct FeedConfiguration {
     tags: Option<Vec<String>>,
 }
 
-pub fn run(db: &Database, config: &ConfigurationFile) -> Result<()> {
+#[derive(StructOpt, Debug)]
+pub struct CommandLineArguments {
+    /// Style to format with. The default is 'inbox'.
+    #[structopt(short = "-s", long = "--style", default_value = "inbox")]
+    style: String,
+}
+
+pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
 
     let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
@@ -65,6 +73,11 @@ pub fn run(db: &Database, config: &ConfigurationFile) -> Result<()> {
 
     let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
 
+    let style = match config.formats.get(&args.style) {
+        Some(format) => *format,
+        None => return Err(anyhow!("Style '{}' not found.", args.style)),
+    };
+
     let mut tags = taskpaper::Tags::new();
     tags.insert(taskpaper::Tag::new("reading".to_string(), None));
 
@@ -92,7 +105,7 @@ pub fn run(db: &Database, config: &ConfigurationFile) -> Result<()> {
         }
     }
 
-    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox)?;
+    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox, style)?;
     std::fs::write(&archive, toml::to_string_pretty(&seen_ids).unwrap())?;
 
     Ok(())
