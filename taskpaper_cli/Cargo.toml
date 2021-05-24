@@ -10,28 +10,28 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-base64 = "0.11.0"
+base64 = "0.13.0"
 chrono = { version = "0.4.9", features = ["serde"] }
-dirs = "2.0.2"
+dirs = "3.0.2"
 dtparse = "1.0.3"
 futures = "0.3.0-alpha.19"
-html2text = "0.1.8"
+html2text = "0.2.1"
 lazy_static = "1.2.0"
 regex = "1.0.6"
 reqwest = { version = "0.11.3", default-features = false, features = ["blocking", "rustls"] }
 rprompt = "1.0.3"
 self_update = { version = "0.27.0", default-features = false, features = ["rustls", "compression-flate2", "archive-tar"] }
 serde = { version = "1.0.102", features = [ "derive" ] }
-shellexpand = "1.0.0"
-soup = "0.4.1"
+shellexpand = "2.1.0"
+soup = "0.5.1"
 structopt = "0.3.3"
 syndication = "0.5.0"
 taskpaper = { path = "../taskpaper" }
-textwrap = "0.11.0"
+textwrap = "0.13.4"
 tokio = "1.6"
 toml = "0.5.5"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 clipboard = "0.5.0"
 osascript = "0.3.0"
-plist = "0.5.0"
+plist = "1.1.0"

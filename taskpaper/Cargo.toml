@@ -10,7 +10,7 @@ version = "0.21.8"
 bindings = []
 
 [dependencies]
-path-absolutize = "1.1.1"
+path-absolutize = "3.0.10"
 serde = { version = "1.0.102", features = [ "derive" ] }
 sha1 = { version = "0.6.0", features = ["std"] }
 tempdir = "0.3.7"
@@ -18,4 +18,4 @@ thiserror = "1"
 walkdir = "2.2.5"
 
 [dev-dependencies]
-pretty_assertions = "0.6.1"
+pretty_assertions = "0.7.2"

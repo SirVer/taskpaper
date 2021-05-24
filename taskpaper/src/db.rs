@@ -14,7 +14,7 @@ pub struct Database {
 
 impl Database {
     pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self> {
-        let root = dir.as_ref().absolutize()?;
+        let root = dir.as_ref().absolutize()?.to_path_buf();
         Ok(Self { root })
     }
 
