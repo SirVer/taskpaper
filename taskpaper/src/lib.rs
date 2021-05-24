@@ -566,13 +566,17 @@ impl TaskpaperFile {
     /// Return all objects that match 'query' in order of appearance in the file.
     pub fn search(&self, query: &str) -> Result<Vec<NodeId>> {
         let expr = search::Expr::parse(query)?;
+        Ok(self.search_expr(&expr))
+    }
+
+    pub fn search_expr(&self, expr: &search::Expr) -> Vec<NodeId> {
         let mut out = Vec::new();
         for node in self {
             if expr.evaluate(&node.item().tags).is_truish() {
                 out.push(node.id().clone());
             }
         }
-        Ok(out)
+        out
     }
 
     /// Removes all items from 'self' that match 'query' and return them in the returned value.
