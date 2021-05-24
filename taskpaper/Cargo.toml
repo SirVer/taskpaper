@@ -2,7 +2,7 @@
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 edition = "2018"
 name = "taskpaper"
-version = "0.22.0"
+version = "0.22.1"
 
 [features]
 # Enables some APIs that might be used to access internal information of the
