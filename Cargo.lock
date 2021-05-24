@@ -2155,6 +2155,7 @@ dependencies = [
 name = "taskpaper"
 version = "0.21.8"
 dependencies = [
+ "log",
  "path-absolutize",
  "pretty_assertions",
  "serde",

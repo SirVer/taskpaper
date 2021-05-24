@@ -425,13 +425,17 @@ impl TaskpaperFile {
     }
 
     pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
-        let text = ::std::fs::read_to_string(&path)?;
-        let mut s = Self::parse(&text)?;
+        Self::parse_file_with_content(&::std::fs::read_to_string(&path)?, path)
+    }
+
+    pub fn parse_file_with_content(input: &str, path: impl AsRef<Path>) -> Result<Self> {
+        let mut s = Self::parse(&input)?;
         s.path = Some(path.as_ref().to_path_buf());
         Ok(s)
     }
 
     pub fn parse(input: &str) -> Result<Self> {
+        // TODO(sirver): Swift does not filter empty line and that feels more correct.
         let mut it = input
             .trim()
             .lines()
