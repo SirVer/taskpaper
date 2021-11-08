@@ -128,7 +128,7 @@ pub fn parse_and_push_task(
     #[cfg(target_os = "macos")]
     {
         if mail {
-            let mail_message = format!("message://<{}>", get_currently_selected_mail_message()?);
+            let mail_message = format!("message://%3C{}%3E", get_currently_selected_mail_message()?);
             note_text.push(mail_message);
         }
     }
