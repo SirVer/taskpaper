@@ -554,7 +554,7 @@ impl TaskpaperFile {
 
         let has_changed = match std::fs::read_to_string(&path) {
             Err(_) => true,
-            Ok(old) => sha1::Sha1::from(&old) != sha1::Sha1::from(&new),
+            Ok(old) => sha1_smol::Sha1::from(&old) != sha1_smol::Sha1::from(&new),
         };
 
         if has_changed {

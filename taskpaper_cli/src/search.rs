@@ -23,11 +23,6 @@ pub struct CommandLineArguments {
     /// inverse the ordering. They will be used as keys in order of appearance.
     #[structopt(short = "-s")]
     sort_by: Option<String>,
-
-    // TODO(sirver): Retain line number for items.
-    /// Print location (filename) for the match.
-    #[structopt(short = "-l")]
-    location: bool,
 }
 
 #[derive(Debug)]
