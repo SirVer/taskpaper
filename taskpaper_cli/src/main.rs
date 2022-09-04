@@ -5,8 +5,6 @@ use structopt::StructOpt;
 use taskpaper;
 
 mod check_feeds;
-#[cfg(target_os = "macos")]
-mod dump_reading_list;
 mod extract_timeline;
 mod filter;
 mod format;
@@ -80,11 +78,6 @@ enum Command {
     #[structopt(name = "log_done")]
     LogDone(log_done::CommandLineArguments),
 
-    /// Dump reading list. Dumps the reading list as items ready to go into the Inbox.
-    #[cfg(target_os = "macos")]
-    #[structopt(name = "dump_reading_list")]
-    DumpReadingList(dump_reading_list::CommandLineArguments),
-
     /// Remove all of the given tags in the given file.
     #[structopt(name = "purge_tags")]
     PurgeTags(purge_tags::CommandLineArguments),
@@ -127,9 +120,6 @@ fn main() {
         Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
         Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
         Some(Command::CheckFeeds(args)) => check_feeds::run(&db, &args, &config).unwrap(),
-
-        #[cfg(target_os = "macos")]
-        Some(Command::DumpReadingList(args)) => dump_reading_list::dump_reading_list(&db, &args),
         None => {
             // TODO(sirver): I found no easy way to make clap output the usage here.
             println!("Need a subcommand.");
