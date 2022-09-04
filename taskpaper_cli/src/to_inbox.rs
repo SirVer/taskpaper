@@ -1,7 +1,7 @@
 use crate::ConfigurationFile;
 use anyhow::{anyhow, Result};
 #[cfg(target_os = "macos")]
-use clipboard::{ClipboardContext, ClipboardProvider};
+use copypasta::{ClipboardContext, ClipboardProvider};
 #[cfg(target_os = "macos")]
 use osascript::JavaScript;
 use std::io::{self, BufRead};
@@ -62,7 +62,7 @@ fn get_currently_selected_mail_message() -> Result<String> {
 
 #[cfg(target_os = "macos")]
 fn get_clipboard(_: char) -> Result<String> {
-    let mut ctx: ClipboardContext = ClipboardProvider::new()
+    let mut ctx = ClipboardContext::new()
         .map_err(|e| anyhow!("Could not create clipboard context: {}", e))?;
     let contents = ctx
         .get_contents()
@@ -128,7 +128,8 @@ pub fn parse_and_push_task(
     #[cfg(target_os = "macos")]
     {
         if mail {
-            let mail_message = format!("message://%3C{}%3E", get_currently_selected_mail_message()?);
+            let mail_message =
+                format!("message://%3C{}%3E", get_currently_selected_mail_message()?);
             note_text.push(mail_message);
         }
     }
