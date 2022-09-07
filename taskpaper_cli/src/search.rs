@@ -39,8 +39,10 @@ struct SortBy {
 
 fn get_sort_values(
     tpf: &TaskpaperFile,
-    node_id: &taskpaper::NodeId,
     sorting_set: &[SortBy],
+    node_id: &taskpaper::NodeId,
+    path: &Path,
+    line_no: usize,
 ) -> Vec<Option<String>> {
     let mut values = Vec::new();
     let tags = tpf[node_id].item().tags();
@@ -53,6 +55,9 @@ fn get_sort_values(
             },
         }
     }
+    // As tiebreaker, we use (path, string)
+    values.push(Some(path.to_string_lossy().to_string()));
+    values.push(Some(format!("{:05}", line_no)));
     values
 }
 
@@ -105,50 +110,66 @@ pub fn search(
         }
     }
 
-    let mut results: HashMap<&Path, _> = HashMap::new();
-    for (path, tpf) in files {
-        results.insert(path as &Path, (tpf.search(&query)?, tpf));
+    let mut searches: HashMap<&Path, _> = HashMap::new();
+    struct Match<'a> {
+        tpf: &'a TaskpaperFile,
+        path: &'a Path,
+        line_no: usize,
+        node_id: taskpaper::NodeId,
     }
 
-    let mut paths: Vec<_> = results.keys().map(|s| s.to_path_buf()).collect();
-    paths.sort();
-    for path in paths {
-        let (mut node_ids, tpf) = results.remove(&path as &Path).expect("By construction");
+    for (path, tpf) in files {
+        searches.insert(path as &Path, (tpf.search(&query)?, tpf));
+    }
+
+    let mut matches = Vec::new();
+    for path in searches.keys() {
+        let (node_ids, tpf) = &searches[&path as &Path];
         if node_ids.is_empty() {
             continue;
         }
 
-        if let Some(ref s) = sort_order {
-            node_ids.sort_by(|a, b| {
-                let val_a = get_sort_values(tpf, a, &s);
-                let val_b = get_sort_values(tpf, b, &s);
-                for (idx, s) in s.iter().enumerate() {
-                    let res = match s.dir {
-                        SortDir::Asc => val_a[idx].cmp(&val_b[idx]),
-                        SortDir::Desc => val_b[idx].cmp(&val_a[idx]),
-                    };
-                    match res {
-                        cmp::Ordering::Less | cmp::Ordering::Greater => return res,
-                        cmp::Ordering::Equal => (),
-                    }
-                }
-                cmp::Ordering::Equal
-            });
-        }
-
         for node_id in node_ids.iter() {
             let item = tpf[node_id].item();
-            let line = item.line_index().unwrap() + 1;
-            let text = tpf.node_to_string(node_id);
-            print!("{}:{}:{}", path.display(), line, text);
-            if args.descendants {
-                // We skip the node itself, since that has been taken care off.
-                for child_node in tpf.iter_node(node_id).skip(1) {
-                    let indent = child_node.item().indent - item.indent;
-                    let indent_str = "\t".repeat(indent as usize);
-                    let text = tpf.node_to_string(child_node.id());
-                    print!("{}{}", indent_str, text);
+            matches.push(Match {
+                tpf,
+                path,
+                line_no: item.line_index().unwrap() + 1,
+                node_id: node_id.clone(),
+            });
+        }
+    }
+
+    if let Some(ref s) = sort_order {
+        matches.sort_by(|a, b| {
+            let val_a = get_sort_values(a.tpf, &s, &a.node_id, a.path, a.line_no);
+            let val_b = get_sort_values(b.tpf, &s, &b.node_id, b.path, b.line_no);
+            for (idx, s) in s.iter().enumerate() {
+                let res = match s.dir {
+                    SortDir::Asc => val_a[idx].cmp(&val_b[idx]),
+                    SortDir::Desc => val_b[idx].cmp(&val_a[idx]),
+                };
+                match res {
+                    cmp::Ordering::Less | cmp::Ordering::Greater => return res,
+                    cmp::Ordering::Equal => (),
                 }
+            }
+            cmp::Ordering::Equal
+        });
+    }
+
+    for m in matches {
+        let item = m.tpf[&m.node_id].item();
+        let line = item.line_index().unwrap() + 1;
+        let text = m.tpf.node_to_string(&m.node_id);
+        print!("{}:{}:{}", m.path.display(), line, text);
+        if args.descendants {
+            // We skip the node itself, since that has been taken care off.
+            for child_node in m.tpf.iter_node(&m.node_id).skip(1) {
+                let indent = child_node.item().indent - item.indent;
+                let indent_str = "\t".repeat(indent as usize);
+                let text = m.tpf.node_to_string(child_node.id());
+                print!("{}{}", indent_str, text);
             }
         }
     }
