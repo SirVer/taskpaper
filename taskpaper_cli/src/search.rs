@@ -106,6 +106,15 @@ pub fn search(
     } else {
         all_files = db.parse_all_files()?;
         for (path, tpf) in &all_files {
+            if let Some(name) = path.file_name() {
+                if config
+                    .search
+                    .excluded_files
+                    .contains(name.to_string_lossy().as_ref())
+                {
+                    continue;
+                }
+            }
             files.push((path, tpf));
         }
     }

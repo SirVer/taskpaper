@@ -15,3 +15,6 @@ empty_line_after_project = { top_level = 0, first_level = 1, others = 0 }
 [formats.inbox]
 sort = 'Nothing'
 empty_line_after_project = { top_level = 0, first_level = 0, others = 0 }
+
+[search]
+excluded_files = []

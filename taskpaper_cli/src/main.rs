@@ -1,6 +1,6 @@
 use self_update::cargo_crate_version;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use structopt::StructOpt;
 use taskpaper;
 
@@ -16,11 +16,17 @@ mod tickle;
 mod to_inbox;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct SearchOptions {
+    excluded_files: HashSet<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigurationFile {
     database: String,
     formats: HashMap<String, taskpaper::FormatOptions>,
     aliases: HashMap<String, String>,
     feeds: Vec<check_feeds::FeedConfiguration>,
+    search: SearchOptions,
 }
 
 fn update() -> Result<(), Box<dyn ::std::error::Error>> {
