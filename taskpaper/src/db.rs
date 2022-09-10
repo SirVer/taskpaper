@@ -1,10 +1,150 @@
 use crate::{Config, FormatOptions};
 use crate::{Result, TaskpaperFile};
 use path_absolutize::Absolutize;
+use std::cmp;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+
+#[derive(Debug)]
+enum SortDir {
+    Desc,
+    Asc,
+}
+
+#[derive(Debug)]
+struct SortBy {
+    key: String,
+    dir: SortDir,
+}
+
+fn get_sort_values(
+    tpf: &TaskpaperFile,
+    sorting_set: &[SortBy],
+    node_id: &crate::NodeId,
+    path: &Path,
+    line_no: usize,
+) -> Vec<Option<String>> {
+    let mut values = Vec::new();
+    let tags = tpf[node_id].item().tags();
+    for s in sorting_set {
+        match tags.get(&s.key) {
+            None => values.push(None),
+            Some(t) => match &t.value {
+                None => values.push(None),
+                Some(v) => values.push(Some(v.to_string())),
+            },
+        }
+    }
+    // As tiebreaker, we use (path, string)
+    values.push(Some(path.to_string_lossy().to_string()));
+    values.push(Some(format!("{:05}", line_no)));
+    values
+}
+
+pub struct Match<'a> {
+    pub tpf: &'a TaskpaperFile,
+    pub path: &'a Path,
+    pub line_no: usize,
+    pub node_id: crate::NodeId,
+}
+
+// TODO(hrapp): This seems messy - on the one site, this should be part of the Database, on the
+// other site this is used in the App too. It is also questionable if all files should be searched
+// or only one.
+pub fn search<'a>(
+    mut query: String,
+    sort_by: Option<&str>,
+    config: &Config,
+    files_map: &'a HashMap<PathBuf, impl AsRef<TaskpaperFile>>,
+) -> Result<Vec<Match<'a>>> {
+    'outer: for _ in 0..50 {
+        for (key, value) in &config.aliases {
+            let new_query = query.replace(key, value);
+            if new_query != query {
+                query = new_query;
+                continue 'outer;
+            }
+        }
+    }
+
+    let sort_order = sort_by.as_ref().map(|s| {
+        let mut res = Vec::new();
+        for entry in s.split(",") {
+            let entry = entry.trim();
+            if entry.starts_with("-") {
+                res.push(SortBy {
+                    key: entry.trim_start_matches("-").to_string(),
+                    dir: SortDir::Desc,
+                })
+            } else {
+                res.push(SortBy {
+                    key: entry.to_string(),
+                    dir: SortDir::Asc,
+                })
+            }
+        }
+        res
+    });
+
+    let mut files = Vec::new();
+    for (path, tpf) in files_map {
+        if let Some(name) = path.file_name() {
+            if config
+                .search
+                .excluded_files
+                .contains(name.to_string_lossy().as_ref())
+            {
+                continue;
+            }
+        }
+        files.push((path, tpf));
+    }
+
+    let mut searches: HashMap<&Path, _> = HashMap::new();
+    for (path, tpf) in files {
+        searches.insert(path as &Path, (tpf.as_ref().search(&query)?, tpf.as_ref()));
+    }
+
+    let mut matches = Vec::new();
+    for path in searches.keys() {
+        let (node_ids, tpf) = &searches[&path as &Path];
+        if node_ids.is_empty() {
+            continue;
+        }
+
+        for node_id in node_ids.iter() {
+            let item = tpf[node_id].item();
+            matches.push(Match {
+                tpf,
+                path,
+                line_no: item.line_index().unwrap() + 1,
+                node_id: node_id.clone(),
+            });
+        }
+    }
+
+    if let Some(ref s) = sort_order {
+        matches.sort_by(|a, b| {
+            let val_a = get_sort_values(a.tpf, &s, &a.node_id, a.path, a.line_no);
+            let val_b = get_sort_values(b.tpf, &s, &b.node_id, b.path, b.line_no);
+            for (idx, s) in s.iter().enumerate() {
+                let res = match s.dir {
+                    SortDir::Asc => val_a[idx].cmp(&val_b[idx]),
+                    SortDir::Desc => val_b[idx].cmp(&val_a[idx]),
+                };
+                match res {
+                    cmp::Ordering::Less | cmp::Ordering::Greater => return res,
+                    cmp::Ordering::Equal => (),
+                }
+            }
+            cmp::Ordering::Equal
+        });
+    }
+
+    Ok(matches)
+}
 
 /// A folder containing many Taskpaper files. Some of which are special, like inbox, timeline.
 #[derive(Debug)]
@@ -66,8 +206,9 @@ impl Database {
         TaskpaperFile::parse_file(kind.find(&self.root).expect("Common file not found!"))
     }
 
-    fn get_format_for_filename(&self, path: &Path) -> Result<FormatOptions> {
+    pub fn get_format_for_filename(&self, path: impl AsRef<Path>) -> Result<FormatOptions> {
         let stem = path
+            .as_ref()
             .file_stem()
             .expect("Always a filestem")
             .to_string_lossy();

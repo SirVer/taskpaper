@@ -419,6 +419,12 @@ pub struct TaskpaperFile {
     path: Option<PathBuf>,
 }
 
+impl AsRef<TaskpaperFile> for TaskpaperFile {
+    fn as_ref(&self) -> &TaskpaperFile {
+        self
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum Position<'a> {
     AsFirst,

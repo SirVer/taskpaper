@@ -213,10 +213,7 @@ mod tests {
             "02_todo.taskpaper",
             include_str!("tests/log_done/todo_in.taskpaper"),
         );
-        test.write_file(
-            ".config.toml",
-            include_str!("tests/log_done/.config.toml"),
-        );
+        test.write_file(".config.toml", include_str!("tests/log_done/.config.toml"));
         test.write_file("40_logbook.taskpaper", "");
         test.write_file("03_tickle.taskpaper", "");
 

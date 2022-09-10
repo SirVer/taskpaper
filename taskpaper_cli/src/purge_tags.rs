@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::{TaskpaperFile, Database};
+use taskpaper::{Database, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
