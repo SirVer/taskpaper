@@ -1,4 +1,4 @@
-use crate::{ConfigurationFile, FormatOptions};
+use crate::{Config, FormatOptions};
 use crate::{Result, TaskpaperFile};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ impl Database {
         Ok(Self { root })
     }
 
-    pub fn configuration(&self) -> Result<ConfigurationFile> {
+    pub fn config(&self) -> Result<Config> {
         let data = std::fs::read_to_string(self.root.join(".config.toml"))?;
         Ok(toml::from_str(&data).map_err(|e| crate::Error::InvalidConfig(e.to_string()))?)
     }
@@ -71,11 +71,9 @@ impl Database {
             .file_stem()
             .expect("Always a filestem")
             .to_string_lossy();
-        println!("#hrapp stem: {:#?}", stem);
-        let config = self.configuration()?;
+        let config = self.config()?;
         for name in [stem.as_ref(), "default"] {
             if let Some(f) = config.formats.get(name) {
-                println!("#hrapp Found name: {:#?}", name);
                 return Ok(f.clone());
             }
         }

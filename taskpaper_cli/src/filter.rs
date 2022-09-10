@@ -18,7 +18,7 @@ pub struct CommandLineArguments {
 }
 
 pub fn run(db: &Database, args: &CommandLineArguments) -> Result<()> {
-    let config = db.configuration()?;
+    let config = db.config()?;
     let style = match config.formats.get(&args.style) {
         Some(format) => *format,
         None => return Err(anyhow!("Style '{}' not found.", args.style)),

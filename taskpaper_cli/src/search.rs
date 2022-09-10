@@ -61,7 +61,7 @@ fn get_sort_values(
 }
 
 pub fn search(db: &Database, args: &CommandLineArguments) -> Result<()> {
-    let config = db.configuration()?;
+    let config = db.config()?;
     let mut files = Vec::new();
 
     let mut query = args.query.clone();

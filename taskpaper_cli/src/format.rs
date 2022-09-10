@@ -22,7 +22,7 @@ pub struct CommandLineArguments {
 }
 
 pub fn format(db: &Database, args: &CommandLineArguments) -> Result<()> {
-    let config = db.configuration()?;
+    let config = db.config()?;
     let style = match args.style.as_ref() {
         None => taskpaper::FormatOptions::default(),
         Some(s) => match config.formats.get(s) {

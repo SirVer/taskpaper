@@ -46,8 +46,7 @@ pub struct SearchOptions {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-// NOCOM(#hrapp): rename to Configuration
-pub struct ConfigurationFile {
+pub struct Config {
     pub formats: HashMap<String, FormatOptions>,
     pub aliases: HashMap<String, String>,
     pub search: SearchOptions,

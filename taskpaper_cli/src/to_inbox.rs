@@ -157,7 +157,7 @@ fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
 }
 
 pub fn to_inbox(db: &Database, args: &CommandLineArguments) -> Result<()> {
-    let config = db.configuration()?;
+    let config = db.config()?;
     let mut tpf = match &args.file {
         Some(f) => {
             if f.exists() {
