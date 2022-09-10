@@ -1,4 +1,3 @@
-use crate::ConfigurationFile;
 use anyhow::{anyhow, Result};
 #[cfg(target_os = "macos")]
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -157,11 +156,8 @@ fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
         .map(|n| n.id().clone())
 }
 
-pub fn to_inbox(
-    db: &Database,
-    args: &CommandLineArguments,
-    config: &ConfigurationFile,
-) -> Result<()> {
+pub fn to_inbox(db: &Database, args: &CommandLineArguments) -> Result<()> {
+    let config = db.configuration()?;
     let mut tpf = match &args.file {
         Some(f) => {
             if f.exists() {
@@ -226,7 +222,7 @@ pub fn to_inbox(
 
     match &args.file {
         Some(f) => tpf.write(f, style)?,
-        None => db.overwrite_common_file(&tpf, taskpaper::CommonFileKind::Inbox, style)?,
+        None => db.overwrite_common_file(&tpf, taskpaper::CommonFileKind::Inbox)?,
     };
     Ok(())
 }

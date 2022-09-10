@@ -1,13 +1,8 @@
-use crate::ConfigurationFile;
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use taskpaper::{Database, Position, TaskpaperFile};
 
-pub fn extract_timeline(
-    db: &Database,
-    todo: &mut TaskpaperFile,
-    config: &ConfigurationFile,
-) -> Result<()> {
+pub fn extract_timeline(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
     if let Some(path) = db.path_of_common_file(taskpaper::CommonFileKind::Timeline) {
         taskpaper::mirror_changes(&path, todo)?;
     }
@@ -53,10 +48,6 @@ pub fn extract_timeline(
             timeline.insert(item.clone(), Position::AsLastChildOf(&project_id));
         }
     }
-    db.overwrite_common_file(
-        &timeline,
-        taskpaper::CommonFileKind::Timeline,
-        config.formats["timeline"],
-    )?;
+    db.overwrite_common_file(&timeline, taskpaper::CommonFileKind::Timeline)?;
     Ok(())
 }

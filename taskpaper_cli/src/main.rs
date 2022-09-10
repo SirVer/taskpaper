@@ -1,8 +1,6 @@
 use self_update::cargo_crate_version;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use structopt::StructOpt;
-use taskpaper;
 
 mod check_feeds;
 mod extract_timeline;
@@ -16,18 +14,9 @@ mod tickle;
 mod to_inbox;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SearchOptions {
-    excluded_files: HashSet<String>,
-    saved_searches: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ConfigurationFile {
+pub struct CliConfig {
     database: String,
-    formats: HashMap<String, taskpaper::FormatOptions>,
-    aliases: HashMap<String, String>,
     feeds: Vec<check_feeds::FeedConfiguration>,
-    search: SearchOptions,
 }
 
 fn update() -> Result<(), Box<dyn ::std::error::Error>> {
@@ -106,11 +95,10 @@ fn main() {
     }
 
     let home = dirs::home_dir().expect("HOME not set.");
-    let config: ConfigurationFile = {
+    let config: CliConfig = {
         let data = std::fs::read_to_string(home.join(".taskpaperrc"))
             .expect("Could not read ~/.taskpaperrc.");
-        let mut config: ConfigurationFile =
-            toml::from_str(&data).expect("Could not parse ~/.taskpaperrc.");
+        let mut config: CliConfig = toml::from_str(&data).expect("Could not parse ~/.taskpaperrc.");
         config.database =
             shellexpand::tilde_with_context(&config.database, dirs::home_dir).to_string();
         config
@@ -119,13 +107,13 @@ fn main() {
     let db = taskpaper::Database::from_dir(&config.database).expect("Could not open the database.");
 
     match args.cmd {
-        Some(Command::Search(args)) => search::search(&db, &args, &config).unwrap(),
-        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args, &config).unwrap(),
-        Some(Command::Format(args)) => format::format(&args, &config).unwrap(),
-        Some(Command::Housekeeping(args)) => housekeeping::run(&db, &args, &config).unwrap(),
-        Some(Command::LogDone(args)) => log_done::run(&db, &args, &config).unwrap(),
-        Some(Command::PurgeTags(args)) => purge_tags::run(&args, &config).unwrap(),
-        Some(Command::Filter(args)) => filter::run(&args, &config).unwrap(),
+        Some(Command::Search(args)) => search::search(&db, &args).unwrap(),
+        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args).unwrap(),
+        Some(Command::Format(args)) => format::format(&db, &args).unwrap(),
+        Some(Command::Housekeeping(args)) => housekeeping::run(&db, &args).unwrap(),
+        Some(Command::LogDone(args)) => log_done::run(&db, &args).unwrap(),
+        Some(Command::PurgeTags(args)) => purge_tags::run(&db, &args).unwrap(),
+        Some(Command::Filter(args)) => filter::run(&db, &args).unwrap(),
         Some(Command::CheckFeeds(args)) => check_feeds::run(&db, &args, &config).unwrap(),
         None => {
             // TODO(sirver): I found no easy way to make clap output the usage here.

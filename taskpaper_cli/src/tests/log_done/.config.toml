@@ -1,18 +1,14 @@
-database = ""
-feeds = []
-
 [aliases]
 
-
-[formats.logbook]
+[formats.40_logbook]
 sort = 'Nothing'
 empty_line_after_project = { top_level = 2, first_level = 0, others = 0 }
 
-[formats.todo]
+[formats.02_todo]
 sort = 'ProjectsFirst'
 empty_line_after_project = { top_level = 0, first_level = 1, others = 0 }
 
-[formats.inbox]
+[formats.01_inbox]
 sort = 'Nothing'
 empty_line_after_project = { top_level = 0, first_level = 0, others = 0 }
 

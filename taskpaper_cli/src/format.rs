@@ -1,10 +1,9 @@
-use crate::ConfigurationFile;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::TaskpaperFile;
+use taskpaper::{Database, TaskpaperFile};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Formats {
@@ -17,13 +16,13 @@ pub struct CommandLineArguments {
     #[structopt(parse(from_os_str))]
     input: PathBuf,
 
-    /// Style to format with. The default is 'default' for free standing files and as configured
-    /// for files within the Database.
+    /// Style to format with. The default is 'default'.
     #[structopt(short = "-s", long = "--style")]
     style: Option<String>,
 }
 
-pub fn format(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn format(db: &Database, args: &CommandLineArguments) -> Result<()> {
+    let config = db.configuration()?;
     let style = match args.style.as_ref() {
         None => taskpaper::FormatOptions::default(),
         Some(s) => match config.formats.get(s) {

@@ -1,8 +1,7 @@
-use crate::ConfigurationFile;
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use taskpaper::TaskpaperFile;
+use taskpaper::{Database, TaskpaperFile};
 
 #[derive(StructOpt, Debug)]
 pub struct CommandLineArguments {
@@ -18,7 +17,8 @@ pub struct CommandLineArguments {
     query: String,
 }
 
-pub fn run(args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn run(db: &Database, args: &CommandLineArguments) -> Result<()> {
+    let config = db.configuration()?;
     let style = match config.formats.get(&args.style) {
         Some(format) => *format,
         None => return Err(anyhow!("Style '{}' not found.", args.style)),

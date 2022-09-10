@@ -1,4 +1,4 @@
-use crate::ConfigurationFile;
+use crate::CliConfig;
 use anyhow::{anyhow, Context, Result};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -29,13 +29,9 @@ pub struct FeedConfiguration {
 }
 
 #[derive(StructOpt, Debug)]
-pub struct CommandLineArguments {
-    /// Style to format with. The default is 'inbox'.
-    #[structopt(short = "-s", long = "--style", default_value = "inbox")]
-    style: String,
-}
+pub struct CommandLineArguments {}
 
-pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
 
     let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
@@ -50,9 +46,9 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     let result: Result<Vec<TaskItem>> = rt.block_on(async {
         let client = reqwest::Client::builder().build()?;
 
-        let feeds = read_feeds(&client, &config.feeds, seen_ids_ref).await?;
+        let feeds = read_feeds(&client, &cli_config.feeds, seen_ids_ref).await?;
         let mut rv = Vec::new();
-        for (feed, feed_config) in feeds.into_iter().zip(&config.feeds) {
+        for (feed, feed_config) in feeds.into_iter().zip(&cli_config.feeds) {
             match feed {
                 Ok(feed_items) => rv.extend(feed_items.into_iter()),
                 Err(e) => rv.push(TaskItem {
@@ -72,11 +68,6 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
     let result = result?;
 
     let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
-
-    let style = match config.formats.get(&args.style) {
-        Some(format) => *format,
-        None => return Err(anyhow!("Style '{}' not found.", args.style)),
-    };
 
     let mut tags = taskpaper::Tags::new();
     tags.insert(taskpaper::Tag::new("reading".to_string(), None));
@@ -105,7 +96,7 @@ pub fn run(db: &Database, args: &CommandLineArguments, config: &ConfigurationFil
         }
     }
 
-    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox, style)?;
+    db.overwrite_common_file(&inbox, taskpaper::CommonFileKind::Inbox)?;
     std::fs::write(&archive, toml::to_string_pretty(&seen_ids).unwrap())?;
 
     Ok(())

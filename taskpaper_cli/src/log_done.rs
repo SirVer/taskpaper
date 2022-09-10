@@ -1,4 +1,3 @@
-use crate::ConfigurationFile;
 use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use lazy_static::lazy_static;
@@ -154,7 +153,7 @@ pub fn parse_duration(s: &str) -> Result<chrono::Duration> {
     Ok(chrono::Duration::from_std(time).unwrap())
 }
 
-pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) -> Result<()> {
+pub fn run(db: &Database, _: &CommandLineArguments) -> Result<()> {
     let mut todo = db.parse_common_file(taskpaper::CommonFileKind::Todo)?;
     let mut tickle = db.parse_common_file(taskpaper::CommonFileKind::Tickle)?;
     let mut logbook = db.parse_common_file(taskpaper::CommonFileKind::Logbook)?;
@@ -184,21 +183,9 @@ pub fn run(db: &Database, _: &CommandLineArguments, config: &ConfigurationFile) 
         &mut logbook,
     );
 
-    db.overwrite_common_file(
-        &todo,
-        taskpaper::CommonFileKind::Todo,
-        config.formats["todo"],
-    )?;
-    db.overwrite_common_file(
-        &logbook,
-        taskpaper::CommonFileKind::Logbook,
-        config.formats["logbook"],
-    )?;
-    db.overwrite_common_file(
-        &tickle,
-        taskpaper::CommonFileKind::Tickle,
-        config.formats["inbox"],
-    )?;
+    db.overwrite_common_file(&todo, taskpaper::CommonFileKind::Todo)?;
+    db.overwrite_common_file(&logbook, taskpaper::CommonFileKind::Logbook)?;
+    db.overwrite_common_file(&tickle, taskpaper::CommonFileKind::Tickle)?;
     Ok(())
 }
 
@@ -221,19 +208,21 @@ mod tests {
     #[test]
     fn test_log_done() {
         let mut test = DatabaseTest::new();
-        let config: ConfigurationFile =
-            toml::from_str(include_str!("tests/log_done/taskpaperrc")).unwrap();
 
         test.write_file(
             "02_todo.taskpaper",
             include_str!("tests/log_done/todo_in.taskpaper"),
+        );
+        test.write_file(
+            ".config.toml",
+            include_str!("tests/log_done/.config.toml"),
         );
         test.write_file("40_logbook.taskpaper", "");
         test.write_file("03_tickle.taskpaper", "");
 
         let db = test.read_database();
 
-        run(db, &CommandLineArguments {}, &config).unwrap();
+        run(db, &CommandLineArguments {}).unwrap();
 
         test.assert_eq_to_golden(
             "src/tests/log_done/tickle_out.taskpaper",

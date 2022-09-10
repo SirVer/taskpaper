@@ -1,4 +1,3 @@
-use crate::ConfigurationFile;
 use anyhow::Result;
 use std::cmp;
 use std::collections::HashMap;
@@ -61,11 +60,8 @@ fn get_sort_values(
     values
 }
 
-pub fn search(
-    db: &Database,
-    args: &CommandLineArguments,
-    config: &ConfigurationFile,
-) -> Result<()> {
+pub fn search(db: &Database, args: &CommandLineArguments) -> Result<()> {
+    let config = db.configuration()?;
     let mut files = Vec::new();
 
     let mut query = args.query.clone();

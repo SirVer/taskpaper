@@ -1,4 +1,4 @@
-use crate::FormatOptions;
+use crate::{ConfigurationFile, FormatOptions};
 use crate::{Result, TaskpaperFile};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -16,6 +16,11 @@ impl Database {
     pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self> {
         let root = dir.as_ref().absolutize()?.to_path_buf();
         Ok(Self { root })
+    }
+
+    pub fn configuration(&self) -> Result<ConfigurationFile> {
+        let data = std::fs::read_to_string(self.root.join(".config.toml"))?;
+        Ok(toml::from_str(&data).map_err(|e| crate::Error::InvalidConfig(e.to_string()))?)
     }
 
     pub fn parse_all_files(&self) -> Result<HashMap<PathBuf, TaskpaperFile>> {
@@ -61,15 +66,27 @@ impl Database {
         TaskpaperFile::parse_file(kind.find(&self.root).expect("Common file not found!"))
     }
 
-    pub fn overwrite_common_file(
-        &self,
-        tpf: &TaskpaperFile,
-        kind: CommonFileKind,
-        options: FormatOptions,
-    ) -> Result<()> {
+    fn get_format_for_filename(&self, path: &Path) -> Result<FormatOptions> {
+        let stem = path
+            .file_stem()
+            .expect("Always a filestem")
+            .to_string_lossy();
+        println!("#hrapp stem: {:#?}", stem);
+        let config = self.configuration()?;
+        for name in [stem.as_ref(), "default"] {
+            if let Some(f) = config.formats.get(name) {
+                println!("#hrapp Found name: {:#?}", name);
+                return Ok(f.clone());
+            }
+        }
+        Ok(FormatOptions::default())
+    }
+
+    pub fn overwrite_common_file(&self, tpf: &TaskpaperFile, kind: CommonFileKind) -> Result<()> {
+        let format = self.get_format_for_filename(&kind.to_path_buf())?;
         tpf.write(
             kind.find(&self.root).expect("Common file not found!"),
-            options,
+            format,
         )
     }
 
@@ -89,13 +106,7 @@ pub enum CommonFileKind {
 
 impl CommonFileKind {
     fn find(&self, root: &Path) -> Option<PathBuf> {
-        let path = match *self {
-            CommonFileKind::Inbox => root.join("01_inbox.taskpaper"),
-            CommonFileKind::Todo => root.join("02_todo.taskpaper"),
-            CommonFileKind::Tickle => root.join("03_tickle.taskpaper"),
-            CommonFileKind::Logbook => root.join("40_logbook.taskpaper"),
-            CommonFileKind::Timeline => root.join("10_timeline.taskpaper"),
-        };
+        let path = root.join(self.to_path_buf());
         if path.exists() {
             Some(path)
         } else {
@@ -103,7 +114,6 @@ impl CommonFileKind {
         }
     }
 
-    #[cfg(test)]
     fn to_path_buf(&self) -> PathBuf {
         match *self {
             CommonFileKind::Inbox => PathBuf::from("01_inbox.taskpaper"),

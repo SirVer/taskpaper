@@ -12,12 +12,46 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::cmp;
 use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Write};
 use std::io;
 use std::iter::Peekable;
 use std::mem;
 use std::ops::{Index, IndexMut};
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct FormatOptions {
+    pub sort: Sort,
+    pub empty_line_after_project: EmptyLineAfterProject,
+}
+
+impl Default for FormatOptions {
+    fn default() -> Self {
+        FormatOptions {
+            sort: Sort::ProjectsFirst,
+            empty_line_after_project: EmptyLineAfterProject {
+                top_level: 1,
+                first_level: 1,
+                others: 0,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchOptions {
+    pub excluded_files: HashSet<String>,
+    pub saved_searches: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+// NOCOM(#hrapp): rename to Configuration
+pub struct ConfigurationFile {
+    pub formats: HashMap<String, FormatOptions>,
+    pub aliases: HashMap<String, String>,
+    pub search: SearchOptions,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeId(usize);
@@ -66,6 +100,9 @@ pub enum Error {
 
     #[error("invalid query: {0}")]
     QuerySyntaxError(String),
+
+    #[error("invalid .config.toml: {0}")]
+    InvalidConfig(String),
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;
@@ -96,25 +133,6 @@ pub struct EmptyLineAfterProject {
     pub top_level: usize,
     pub first_level: usize,
     pub others: usize,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct FormatOptions {
-    pub sort: Sort,
-    pub empty_line_after_project: EmptyLineAfterProject,
-}
-
-impl Default for FormatOptions {
-    fn default() -> Self {
-        FormatOptions {
-            sort: Sort::ProjectsFirst,
-            empty_line_after_project: EmptyLineAfterProject {
-                top_level: 1,
-                first_level: 1,
-                others: 0,
-            },
-        }
-    }
 }
 
 fn append_project_to_string(item: &Item, buf: &mut String, indent: usize) -> fmt::Result {
