@@ -18,6 +18,7 @@ mod to_inbox;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SearchOptions {
     excluded_files: HashSet<String>,
+    saved_searches: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
