@@ -27,7 +27,7 @@ pub struct CommandLineArguments {
     base64: bool,
 
     /// Style to format with. The default is 'inbox'.
-    #[structopt(short = "-s", long = "--style", default_value = "inbox")]
+    #[structopt(short = "-s", long = "--style", default_value = "01_inbox")]
     style: String,
 
     /// The file to add this to. If not specified this is by default the inbox file.
@@ -189,11 +189,6 @@ pub fn to_inbox(db: &Database, args: &CommandLineArguments) -> Result<()> {
         }
     };
 
-    let style = match config.formats.get(&args.style) {
-        Some(format) => *format,
-        None => return Err(anyhow!("Style '{}' not found.", args.style)),
-    };
-
     let input: Vec<String> = if args.prompt {
         let reply = rprompt::prompt_reply_stdout("Task> ")?;
         vec![reply]
@@ -221,7 +216,13 @@ pub fn to_inbox(db: &Database, args: &CommandLineArguments) -> Result<()> {
     }
 
     match &args.file {
-        Some(f) => tpf.write(f, style)?,
+        Some(f) => {
+            let style = match config.formats.get(&args.style) {
+                Some(format) => *format,
+                None => return Err(anyhow!("Style '{}' not found.", args.style)),
+            };
+            tpf.write(f, style)?;
+        }
         None => db.overwrite_common_file(&tpf, taskpaper::CommonFileKind::Inbox)?,
     };
     Ok(())
