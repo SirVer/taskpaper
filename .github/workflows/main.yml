@@ -43,8 +43,8 @@ jobs:
       matrix:
         channel: [stable]
         target:
-          # Maybe add the new apple arm stuff here?
           - x86_64-apple-darwin
+          - aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v2
         with:
