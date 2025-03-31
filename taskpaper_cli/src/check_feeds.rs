@@ -69,17 +69,15 @@ pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) 
 
     let mut inbox = db.parse_common_file(taskpaper::CommonFileKind::Inbox)?;
 
-    let mut tags = taskpaper::Tags::new();
-    tags.insert(taskpaper::Tag::new("reading".to_string(), None));
-
     for item in result {
         let mut text = sanitize_item_text(&item.title);
         for tag in item.tags {
+            // We push these as text, because then arguments are pushed correctly too.
             text.push(' ');
-            text.extend(tag.chars());
+            text.push_str(&tag);
         }
         let node_id = inbox.insert(
-            taskpaper::Item::new_with_tags(taskpaper::ItemKind::Task, text, tags.clone()),
+            taskpaper::Item::new(taskpaper::ItemKind::Task, text),
             Position::AsLast,
         );
 
