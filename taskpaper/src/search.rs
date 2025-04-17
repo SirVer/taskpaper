@@ -10,7 +10,7 @@
 //!             | primary;
 //! primary    => STRING | "false" | "true" | "(" expression ")";
 
-use crate::{Error, Item, Result};
+use crate::{Error, Item, ItemKind, Result};
 
 // TODO(sirver): No support for ordering or project limiting as of now.
 #[derive(Debug, PartialEq, Clone)]
@@ -198,18 +198,15 @@ impl Value {
 impl Expr {
     pub fn parse(text: &str) -> Result<Expr> {
         let tokens = lex(text)?;
-        println!("#hrapp tokens: {:#?}", tokens);
         let mut parser = Parser::new(tokens);
         let mut exprs = Vec::new();
         while !parser.is_at_end() {
             let expr = *parser.expression()?;
-            println!("#hrapp expr: {:#?}", expr);
             exprs.push(expr);
             if parser.is_at_end() {
                 break;
             }
         }
-        println!("#hrapp exprs: {:#?}", exprs);
         let mut iter = exprs.into_iter();
         let mut expr = match iter.next() {
             Some(e) => e,
@@ -218,7 +215,6 @@ impl Expr {
         for e in iter {
             expr = Expr::And(Box::new(expr), Box::new(e));
         }
-        println!("#hrapp expr: {:#?}", expr);
         Ok(expr)
     }
 
@@ -231,6 +227,11 @@ impl Expr {
                     None => Value::Bool(true),
                 },
                 None if name == "text" => Value::String(item.text.clone()),
+                None if name == "type" => Value::String(match item.kind {
+                    ItemKind::Project => "project".to_string(),
+                    ItemKind::Task => "task".to_string(),
+                    ItemKind::Note => "note".to_string(),
+                }),
                 None => Value::Undefined,
             },
             // String literal
@@ -334,7 +335,6 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Box<Expr>> {
         let token = self.peek();
-        println!("#hrapp token.kind: {:#?}", token.kind,);
         let expr = match &token.kind {
             TokenKind::LeftParen => {
                 self.advance();
@@ -688,7 +688,6 @@ mod tests {
     #[test]
     fn test_simple_text_contains_search() {
         let expr = Expr::parse("@text contains socks").unwrap();
-        println!("#hrapp expr: {:#?}", expr);
         let i = item_with_text("I need socks and shoes");
         assert_eq!(expr.evaluate(&i).is_truish(), true);
         let i2 = item_with_text("I need shoes");
@@ -982,7 +981,6 @@ mod tests {
     #[test]
     fn test_grouping() {
         let expr = Expr::parse("false or ((false and true) or true)").unwrap();
-        println!("#hrapp expr: {:#?}", expr);
         let item = Item {
             kind: ItemKind::Task,
             text: String::new(),
