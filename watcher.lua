@@ -17,7 +17,7 @@ return {
          },
          {
             name = "Running cargo test [debug]",
-            command = "cargo test " .. PACKAGE .. " --color=always",
+            command = "cargo test " .. PACKAGE .. " --color=always --",
          },
          {
             name = "Running cargo build [debug]",

@@ -595,7 +595,7 @@ impl TaskpaperFile {
     pub fn search_expr(&self, expr: &search::Expr) -> Vec<NodeId> {
         let mut out = Vec::new();
         for node in self {
-            if expr.evaluate(&node.item().tags).is_truish() {
+            if expr.evaluate(node.item()).is_truish() {
                 out.push(node.id().clone());
             }
         }
@@ -613,7 +613,7 @@ impl TaskpaperFile {
         ) -> Vec<NodeId> {
             let mut retained = Vec::new();
             for node_id in node_ids {
-                if expr.evaluate(&arena[node_id.0].item.tags).is_truish() {
+                if expr.evaluate(&arena[node_id.0].item).is_truish() {
                     filtered.push(node_id);
                 } else {
                     retained.push(node_id.clone());

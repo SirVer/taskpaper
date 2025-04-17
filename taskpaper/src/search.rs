@@ -1,14 +1,16 @@
-//! Implements a simple parser and interpreter for search DSL for tasks.
+//! This implements the full syntax as outlined hered
+//! https://guide.taskpaper.com/reference/searches/
+//!
 //!
 //! expression => or;
 //! or         => and ( "or" and )*;
-//! and        => comparison ( "and" comparison )*;
-//! comparison => unary ( ("==" | "!=" | "<" | "<=" | ">" | ">=") unary )*
+//! and        => binary ( "and" binary )*;
+//! binary     => unary ( ("==" | "!=" | "<" | "<=" | ">" | ">=") unary )*
 //! unary      => "not" unary
 //!             | primary;
 //! primary    => STRING | "false" | "true" | "(" expression ")";
 
-use crate::{Error, Result, Tags};
+use crate::{Error, Item, Result};
 
 // TODO(sirver): No support for ordering or project limiting as of now.
 #[derive(Debug, PartialEq, Clone)]
@@ -18,7 +20,7 @@ enum TokenKind {
     LeftParen,
     RightParen,
 
-    /// One or two character tokens.
+    /// Predicates
     BangEqual,
     Equal,
     EqualEqual,
@@ -26,6 +28,7 @@ enum TokenKind {
     GreaterEqual,
     Less,
     LessEqual,
+    Contains,
 
     /// Literals
     String(String),
@@ -39,6 +42,29 @@ enum TokenKind {
     False,
 
     Eof,
+}
+
+impl TokenKind {
+    pub fn is_predicate(&self) -> bool {
+        matches!(
+            *self,
+            TokenKind::BangEqual
+                | TokenKind::Equal
+                | TokenKind::EqualEqual
+                | TokenKind::Greater
+                | TokenKind::GreaterEqual
+                | TokenKind::Less
+                | TokenKind::LessEqual
+                | TokenKind::Contains
+        )
+    }
+
+    pub fn is_keyword(&self) -> bool {
+        matches!(
+            *self,
+            TokenKind::Not | TokenKind::And | TokenKind::Or | TokenKind::True | TokenKind::False
+        )
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -69,6 +95,7 @@ pub enum Expr {
     GreaterEqual(Box<Expr>, Box<Expr>),
     Less(Box<Expr>, Box<Expr>),
     LessEqual(Box<Expr>, Box<Expr>),
+    Contains(Box<Expr>, Box<Expr>),
 
     String(String),
 
@@ -99,7 +126,7 @@ impl Value {
         match self {
             Value::Undefined => false,
             Value::Bool(b) => *b,
-            Value::String(_) => true,
+            Value::String(s) => !s.is_empty(),
         }
     }
 
@@ -171,36 +198,64 @@ impl Value {
 impl Expr {
     pub fn parse(text: &str) -> Result<Expr> {
         let tokens = lex(text)?;
+        println!("#hrapp tokens: {:#?}", tokens);
         let mut parser = Parser::new(tokens);
-        let expr = *parser.expression()?;
-        if !parser.is_at_end() {
-            return Err(Error::QuerySyntaxError(
-                "Unexpected tokens at end of input".to_string(),
-            ));
+        let mut exprs = Vec::new();
+        while !parser.is_at_end() {
+            let expr = *parser.expression()?;
+            println!("#hrapp expr: {:#?}", expr);
+            exprs.push(expr);
+            if parser.is_at_end() {
+                break;
+            }
         }
+        println!("#hrapp exprs: {:#?}", exprs);
+        let mut iter = exprs.into_iter();
+        let mut expr = match iter.next() {
+            Some(e) => e,
+            None => return Err(Error::QuerySyntaxError("Empty query".to_string())),
+        };
+        for e in iter {
+            expr = Expr::And(Box::new(expr), Box::new(e));
+        }
+        println!("#hrapp expr: {:#?}", expr);
         Ok(expr)
     }
 
-    pub fn evaluate(&self, tags: &Tags) -> Value {
+    pub fn evaluate(&self, item: &Item) -> Value {
         match self {
-            Expr::Tag(name) => match tags.get(name) {
+            // Tag: check in item.tags
+            Expr::Tag(name) => match item.tags.get(name) {
                 Some(tag) => match tag.value {
                     Some(value) => Value::String(value),
                     None => Value::Bool(true),
                 },
+                None if name == "text" => Value::String(item.text.clone()),
                 None => Value::Undefined,
             },
+            // String literal
             Expr::String(name) => Value::String(name.to_string()),
-            Expr::Grouping(inner) => inner.evaluate(tags),
-            Expr::NotEqual(l, r) => l.evaluate(tags).equal(&r.evaluate(tags)).not(),
-            Expr::Equal(l, r) => l.evaluate(tags).equal(&r.evaluate(tags)),
-            Expr::Greater(l, r) => l.evaluate(tags).greater(r.evaluate(tags)),
-            Expr::GreaterEqual(l, r) => l.evaluate(tags).greater_equal(r.evaluate(tags)),
-            Expr::Less(l, r) => l.evaluate(tags).less(r.evaluate(tags)),
-            Expr::LessEqual(l, r) => l.evaluate(tags).less_equal(r.evaluate(tags)),
-            Expr::Not(e) => e.evaluate(tags).not(),
-            Expr::And(l, r) => l.evaluate(tags).and(r.evaluate(tags)),
-            Expr::Or(l, r) => l.evaluate(tags).or(r.evaluate(tags)),
+            // Grouping
+            Expr::Grouping(inner) => inner.evaluate(item),
+            // Comparison
+            Expr::NotEqual(l, r) => l.evaluate(item).equal(&r.evaluate(item)).not(),
+            Expr::Equal(l, r) => l.evaluate(item).equal(&r.evaluate(item)),
+            Expr::Greater(l, r) => l.evaluate(item).greater(r.evaluate(item)),
+            Expr::GreaterEqual(l, r) => l.evaluate(item).greater_equal(r.evaluate(item)),
+            Expr::Less(l, r) => l.evaluate(item).less(r.evaluate(item)),
+            Expr::LessEqual(l, r) => l.evaluate(item).less_equal(r.evaluate(item)),
+            // Contains: for text search, check item.text
+            Expr::Contains(l, r) => match l.evaluate(item) {
+                Value::Undefined | Value::Bool(_) => Value::Bool(false),
+                Value::String(left) => match r.evaluate(item) {
+                    Value::Undefined | Value::Bool(_) => Value::Bool(false),
+                    Value::String(right) => Value::Bool(left.to_lowercase().contains(&right.to_lowercase())),
+                },
+            },
+            // Logical
+            Expr::Not(e) => e.evaluate(item).not(),
+            Expr::And(l, r) => l.evaluate(item).and(r.evaluate(item)),
+            Expr::Or(l, r) => l.evaluate(item).or(r.evaluate(item)),
             Expr::True => Value::Bool(true),
             Expr::False => Value::Bool(false),
         }
@@ -231,15 +286,15 @@ impl Parser {
     }
 
     fn and(&mut self) -> Result<Box<Expr>> {
-        let mut expr = self.comparison()?;
+        let mut expr = self.binary()?;
         while self.match_oneof(&[TokenKind::And]) {
-            let right = self.comparison()?;
+            let right = self.binary()?;
             expr = Box::new(Expr::And(expr, right));
         }
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<Box<Expr>> {
+    fn binary(&mut self) -> Result<Box<Expr>> {
         let mut expr = self.unary()?;
         while self.match_oneof(&[
             TokenKind::BangEqual,
@@ -249,6 +304,7 @@ impl Parser {
             TokenKind::GreaterEqual,
             TokenKind::Less,
             TokenKind::LessEqual,
+            TokenKind::Contains,
         ]) {
             // TODO(sirver): This is fairly ugly and requires me to keep a copy. It would be better
             // to pass ownership in advance() and previous()
@@ -261,6 +317,7 @@ impl Parser {
                 TokenKind::GreaterEqual => Box::new(Expr::GreaterEqual(expr, right)),
                 TokenKind::Less => Box::new(Expr::Less(expr, right)),
                 TokenKind::LessEqual => Box::new(Expr::LessEqual(expr, right)),
+                TokenKind::Contains => Box::new(Expr::Contains(expr, right)),
                 c => unreachable!("{:?}", c),
             }
         }
@@ -276,13 +333,11 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Box<Expr>> {
-        let token = self.advance();
+        let token = self.peek();
+        println!("#hrapp token.kind: {:#?}", token.kind,);
         let expr = match &token.kind {
-            TokenKind::False => Box::new(Expr::False),
-            TokenKind::True => Box::new(Expr::True),
-            TokenKind::Tag(name) => Box::new(Expr::Tag(name.clone())),
-            TokenKind::String(string) => Box::new(Expr::String(string.clone())),
             TokenKind::LeftParen => {
+                self.advance();
                 let expr = self.expression()?;
                 if !self.check(&TokenKind::RightParen) {
                     return Err(Error::QuerySyntaxError(
@@ -292,6 +347,16 @@ impl Parser {
                 self.advance();
                 Box::new(Expr::Grouping(expr))
             }
+            TokenKind::False => {
+                self.advance();
+                Box::new(Expr::False)
+            }
+            TokenKind::True => {
+                self.advance();
+                Box::new(Expr::True)
+            }
+            TokenKind::Tag(_) | TokenKind::String(_) => self.parse_clause()?,
+            t if t.is_predicate() => self.parse_clause()?,
             _ => {
                 return Err(Error::QuerySyntaxError(format!(
                     "Invalid token: {:?}",
@@ -300,6 +365,59 @@ impl Parser {
             }
         };
         Ok(expr)
+    }
+
+    /// Parse an atomic clause: [attribute] [relation] value, with defaults.
+    fn parse_clause(&mut self) -> Result<Box<Expr>> {
+        let tag = if let TokenKind::Tag(t) = &self.peek().kind {
+            let v = t.to_string();
+            self.advance();
+            v
+        } else {
+            "text".to_string()
+        };
+
+        let expr = Box::new(Expr::Tag(tag));
+
+        // If we are at the end, this is just a tag. It could also be something like '@foo and @bar'
+        if self.is_at_end() || self.peek().kind.is_keyword() {
+            return Ok(expr);
+        }
+
+        let pred = if self.peek().kind.is_predicate() {
+            let pred = self.peek().kind.clone();
+            self.advance();
+            pred
+        } else {
+            TokenKind::Contains
+        };
+
+        let right = self.value()?;
+
+        // NOCOM(#hrapp): THis code is duplicated
+        match pred {
+            TokenKind::BangEqual => Ok(Box::new(Expr::NotEqual(expr, right))),
+            TokenKind::Equal | TokenKind::EqualEqual => Ok(Box::new(Expr::Equal(expr, right))),
+            TokenKind::Greater => Ok(Box::new(Expr::Greater(expr, right))),
+            TokenKind::GreaterEqual => Ok(Box::new(Expr::GreaterEqual(expr, right))),
+            TokenKind::Less => Ok(Box::new(Expr::Less(expr, right))),
+            TokenKind::LessEqual => Ok(Box::new(Expr::LessEqual(expr, right))),
+            TokenKind::Contains => Ok(Box::new(Expr::Contains(expr, right))),
+            c => unreachable!("{:?}", c),
+        }
+    }
+
+    /// Parse a single value (string or tag) for use as the right-hand side of a clause.
+    fn value(&mut self) -> Result<Box<Expr>> {
+        let token = self.advance();
+        match &token.kind {
+            TokenKind::String(v) => Ok(Box::new(Expr::String(v.to_string()))),
+            TokenKind::Tag(v) => Ok(Box::new(Expr::Tag(v.to_string()))),
+            _ => Err(Error::QuerySyntaxError(format!(
+                "Expected value (string or tag), got: {:?}",
+                token.kind
+            ))),
+        }
     }
 
     fn match_oneof(&mut self, tokens: &[TokenKind]) -> bool {
@@ -390,51 +508,48 @@ fn is_alpha_numeric(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
-fn lex_keyword(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
-    loop {
-        match stream.peek() {
-            Some(c) if is_alpha_numeric(c) => stream.advance(),
-            _ => break,
-        };
-    }
-
-    let len = stream.position() - start;
-    let identifier = &text[start..start + len];
-    let kind = match identifier {
-        "and" => TokenKind::And,
-        "false" => TokenKind::False,
-        "not" => TokenKind::Not,
-        "or" => TokenKind::Or,
-        "true" => TokenKind::True,
-        _ => {
-            return Err(Error::QuerySyntaxError(format!(
-                "Unexpected identifier: '{}'.",
-                identifier
-            )))
+/// A string, it might start with '"' or not - in which case it is a fallback for our parser.
+fn lex_string(
+    first_char: char,
+    text: &str,
+    start: usize,
+    stream: &mut CharStream,
+) -> Result<(String, usize, usize)> {
+    let quoted = first_char == '"';
+    let string_ended = if quoted {
+        |c| c == '"'
+    } else {
+        |c: char| {
+            c.is_whitespace()
+                || c == '@'
+                || c == '('
+                || c == ')'
+                || c == '!'
+                || c == '='
+                || c == '>'
+                || c == '<'
         }
     };
-    Ok(Token::new(kind, start, len))
-}
-
-fn lex_string(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
     loop {
         match stream.peek() {
-            Some(c) if c != '"' => stream.advance(),
+            Some(c) if !string_ended(c) => stream.advance(),
             _ => break,
         };
     }
 
-    if stream.is_at_end() {
+    if quoted && stream.is_at_end() {
         return Err(Error::QuerySyntaxError("Unterminated string.".to_string()));
     }
 
-    stream.advance(); // Consumes '"'
-    let len = stream.position() - start;
-    Ok(Token::new(
-        TokenKind::String(text[start + 1..start + len - 1].to_string()),
-        start,
-        len,
-    ))
+    let (value, len) = if quoted {
+        stream.advance(); // Consumes '"'
+        let len = stream.position() - start;
+        (&text[start + 1..start + len - 1], len)
+    } else {
+        let len = stream.position() - start;
+        (&text[start..start + len], len)
+    };
+    Ok((value.to_string(), start, len))
 }
 
 fn lex_tag(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
@@ -458,12 +573,10 @@ fn lex(input: &str) -> Result<Vec<Token>> {
     while !stream.is_at_end() {
         let position = stream.position();
         match stream.advance() {
-            '"' => tokens.push(lex_string(input, position, &mut stream)?),
             '@' => tokens.push(lex_tag(input, position, &mut stream)?),
             '(' => tokens.push(Token::new(LeftParen, position, 1)),
             ')' => tokens.push(Token::new(RightParen, position, 1)),
             ' ' | '\t' => (),
-            'a'..='z' | 'A'..='Z' => tokens.push(lex_keyword(input, position, &mut stream)?),
             '!' => {
                 if stream.is_next('=') {
                     tokens.push(Token::new(BangEqual, position, 2));
@@ -495,12 +608,30 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                     tokens.push(Token::new(Less, position, 1));
                 }
             }
-            c => {
-                return Err(Error::QuerySyntaxError(format!(
-                    "Unexpected token: '{}'. String continues with: '{}'",
-                    c,
-                    &input[position..]
-                )))
+            other => {
+                let (string, offset, len) = lex_string(other, input, position, &mut stream)?;
+                let kinds: &[_] = if other == '"' {
+                    &[TokenKind::String(string)]
+                } else {
+                    match &string as &str {
+                        // Shortcuts
+                        "project" | "task" | "note" => &[
+                            TokenKind::LeftParen,
+                            TokenKind::Tag("type".to_string()),
+                            TokenKind::Equal,
+                            TokenKind::String(string),
+                            TokenKind::RightParen,
+                        ],
+                        "contains" => &[TokenKind::Contains],
+                        "and" => &[TokenKind::And],
+                        "false" => &[TokenKind::False],
+                        "not" => &[TokenKind::Not],
+                        "or" => &[TokenKind::Or],
+                        "true" => &[TokenKind::True],
+                        _ => &[TokenKind::String(string)],
+                    }
+                };
+                tokens.extend(kinds.iter().map(|kind| Token::new(kind.clone(), offset, len)));
             }
         }
     }
@@ -513,7 +644,179 @@ fn lex(input: &str) -> Result<Vec<Token>> {
 mod tests {
     use super::TokenKind::*;
     use super::*;
+    use crate::{Item, ItemKind, Tag, Tags};
     use pretty_assertions::assert_eq;
+    use std::string::String;
+
+    // Helper to quickly build Items
+    fn item_with_text(text: &str) -> Item {
+        Item {
+            kind: ItemKind::Task,
+            text: text.to_string(),
+            tags: Tags::new(),
+            line_index: None,
+            indent: 0,
+        }
+    }
+    fn item_with_tags(tags: &[(&str, Option<&str>)]) -> Item {
+        let mut t = Tags::new();
+        for (k, v) in tags {
+            t.insert(Tag::new((*k).to_string(), v.map(|s| s.to_string())));
+        }
+        Item {
+            kind: ItemKind::Task,
+            text: String::new(),
+            tags: t,
+            line_index: None,
+            indent: 0,
+        }
+    }
+    fn item_with_text_and_tags(text: &str, tags: &[(&str, Option<&str>)]) -> Item {
+        let mut t = Tags::new();
+        for (k, v) in tags {
+            t.insert(Tag::new((*k).to_string(), v.map(|s| s.to_string())));
+        }
+        Item {
+            kind: ItemKind::Task,
+            text: text.to_string(),
+            tags: t,
+            line_index: None,
+            indent: 0,
+        }
+    }
+
+    #[test]
+    fn test_simple_text_contains_search() {
+        let expr = Expr::parse("@text contains socks").unwrap();
+        println!("#hrapp expr: {:#?}", expr);
+        let i = item_with_text("I need socks and shoes");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i2 = item_with_text("I need shoes");
+        assert_eq!(expr.evaluate(&i2).is_truish(), false);
+    }
+
+    #[test]
+    fn test_simple_text_search() {
+        let expr = Expr::parse("socks").unwrap();
+        let i = item_with_text("I need socks and shoes");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i2 = item_with_text("I need shoes");
+        assert_eq!(expr.evaluate(&i2).is_truish(), false);
+    }
+
+    #[test]
+    fn test_simple_text_search_repeat() {
+        let expr = Expr::parse("socks shoes").unwrap();
+        let i = item_with_text("I need socks and shoes");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let expr2 = Expr::parse("shoes not socks").unwrap();
+        let expr3 = Expr::parse("socks not shoes").unwrap();
+        let i2 = item_with_text("I need shoes");
+        assert_eq!(expr.evaluate(&i2).is_truish(), false);
+        assert_eq!(expr2.evaluate(&i2).is_truish(), true);
+        assert_eq!(expr3.evaluate(&i2).is_truish(), false);
+    }
+
+    #[test]
+    fn test_tag_search_binary() {
+        let expr = Expr::parse("@status = complete").unwrap();
+        let i = item_with_tags(&[("status", Some("complete"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_tags(&[("status", Some("incomplete"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
+
+    #[test]
+    fn test_tag_search_simple() {
+        let expr = Expr::parse("@status").unwrap();
+        let i = item_with_tags(&[("status", Some("anything"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+    }
+
+    #[test]
+    fn test_relation_operators() {
+        let expr = Expr::parse("@priority > 2").unwrap();
+        let i = item_with_tags(&[("priority", Some("3"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_tags(&[("priority", Some("1"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+        let expr = Expr::parse("@desc contains socks").unwrap();
+        let i = item_with_tags(&[("desc", Some("I need socks and shoes"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_tags(&[("desc", Some("I need shoes"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
+
+    #[test]
+    fn test_logical_combinations() {
+        let expr = Expr::parse("socks or shoes").unwrap();
+        let i = item_with_text("I need socks");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_text("I need shoes");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_text("I need hats");
+        let socks_expr = Expr::parse("socks").unwrap();
+        let shoes_expr = Expr::parse("shoes").unwrap();
+        assert_eq!(
+            socks_expr.evaluate(&i).is_truish(),
+            false,
+            "'socks' should not match 'I need hats'"
+        );
+        assert_eq!(
+            shoes_expr.evaluate(&i).is_truish(),
+            false,
+            "'shoes' should not match 'I need hats'"
+        );
+        let or_value = expr.evaluate(&i);
+        dbg!(&or_value);
+        assert_eq!(or_value.is_truish(), false);
+
+        let expr = Expr::parse("not socks").unwrap();
+        let i = item_with_text("I need shoes");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_text("I need socks");
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
+
+    #[test]
+    fn test_shortcut_parse_debug() {
+        let expr = Expr::parse("project Inbox");
+        println!("AST for 'project Inbox': {expr:?}");
+        assert!(expr.is_ok());
+    }
+
+    #[test]
+    fn test_shortcuts() {
+        let expr = Expr::parse("project Inbox").unwrap();
+        let i = item_with_text_and_tags("Inbox", &[("type", Some("project"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_text_and_tags("Inbox", &[("type", Some("task"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
+
+    #[test]
+    fn test_quoted_value_keyword_as_value() {
+        let expr = Expr::parse("@desc contains \"and\"").unwrap();
+        let i = item_with_tags(&[("desc", Some("this and that"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_tags(&[("desc", Some("this or that"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
+
+    #[test]
+    fn test_grouping_and_precedence() {
+        let expr = Expr::parse("(one or two) and not three").unwrap();
+        let i = item_with_text("one");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_text("three");
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+        let i = item_with_text("two");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_text("one two");
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_text("three two");
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
 
     fn tok(kind: TokenKind) -> Token {
         Token {
@@ -639,42 +942,55 @@ mod tests {
 
     #[test]
     fn test_expr_or() {
-        let tags = Tags::new();
+        let item = Item {
+            kind: ItemKind::Task,
+            text: String::new(),
+            tags: Tags::new(),
+            line_index: None,
+            indent: 0,
+        };
         assert_eq!(
             Value::Bool(false),
             Parser::new(vec![tok(False), tok(Or), tok(False), tok(Eof)])
                 .or()
                 .unwrap()
-                .evaluate(&tags)
+                .evaluate(&item)
         );
         assert_eq!(
             Value::Bool(true),
             Parser::new(vec![tok(True), tok(Or), tok(False), tok(Eof)])
                 .or()
                 .unwrap()
-                .evaluate(&tags)
+                .evaluate(&item)
         );
         assert_eq!(
             Value::Bool(true),
             Parser::new(vec![tok(False), tok(Or), tok(True), tok(Eof)])
                 .or()
                 .unwrap()
-                .evaluate(&tags)
+                .evaluate(&item)
         );
         assert_eq!(
             Value::Bool(true),
             Parser::new(vec![tok(True), tok(Or), tok(True), tok(Eof)])
                 .or()
                 .unwrap()
-                .evaluate(&tags)
+                .evaluate(&item)
         );
     }
 
     #[test]
     fn test_grouping() {
         let expr = Expr::parse("false or ((false and true) or true)").unwrap();
-        let tags = Tags::new();
-        assert_eq!(Value::Bool(true), expr.evaluate(&tags));
+        println!("#hrapp expr: {:#?}", expr);
+        let item = Item {
+            kind: ItemKind::Task,
+            text: String::new(),
+            tags: Tags::new(),
+            line_index: None,
+            indent: 0,
+        };
+        assert_eq!(Value::Bool(true), expr.evaluate(&item));
     }
 
     #[test]
@@ -691,17 +1007,21 @@ mod tests {
 
     #[test]
     fn test_mixing_string_bool() {
-        let expr = Expr::parse("false or \"foo\"").unwrap();
-        let tags = Tags::new();
-        assert_eq!(Value::String("foo".into()), expr.evaluate(&tags));
+        let item = Item {
+            kind: ItemKind::Task,
+            text: String::new(),
+            tags: Tags::new(),
+            line_index: None,
+            indent: 0,
+        };
+        let expr = Expr::parse("\"foo\" or true").unwrap();
+        assert_eq!(Value::Bool(true), expr.evaluate(&item));
 
         let expr = Expr::parse("true and \"foo\"").unwrap();
-        let tags = Tags::new();
-        assert_eq!(Value::String("foo".into()), expr.evaluate(&tags));
+        assert_eq!(Value::Bool(false), expr.evaluate(&item));
 
         let expr = Expr::parse("\"foo\" and true").unwrap();
-        let tags = Tags::new();
-        assert_eq!(Value::Bool(true), expr.evaluate(&tags));
+        assert_eq!(Value::Bool(false), expr.evaluate(&item));
     }
 
     #[test]
@@ -710,26 +1030,53 @@ mod tests {
         let expr = Expr::parse("@foo or (@bar = \"any\")").unwrap();
 
         {
-            let tags = Tags::new();
-            assert_eq!(Value::Bool(false), expr.evaluate(&tags));
+            let item = Item {
+                kind: ItemKind::Task,
+                text: String::new(),
+                tags: Tags::new(),
+                line_index: None,
+                indent: 0,
+            };
+            assert_eq!(Value::Bool(false), expr.evaluate(&item));
         }
 
         {
             let mut tags = Tags::new();
             tags.insert(Tag::new("foo".to_string(), None));
-            assert_eq!(Value::Bool(true), expr.evaluate(&tags));
+            let item = Item {
+                kind: ItemKind::Task,
+                text: String::new(),
+                tags,
+                line_index: None,
+                indent: 0,
+            };
+            assert_eq!(Value::Bool(true), expr.evaluate(&item));
         }
 
         {
             let mut tags = Tags::new();
             tags.insert(Tag::new("bar".to_string(), Some("something".to_string())));
-            assert_eq!(Value::Bool(false), expr.evaluate(&tags));
+            let item = Item {
+                kind: ItemKind::Task,
+                text: String::new(),
+                tags,
+                line_index: None,
+                indent: 0,
+            };
+            assert_eq!(Value::Bool(false), expr.evaluate(&item));
         }
 
         {
             let mut tags = Tags::new();
             tags.insert(Tag::new("bar".to_string(), Some("any".to_string())));
-            assert_eq!(Value::Bool(true), expr.evaluate(&tags));
+            let item = Item {
+                kind: ItemKind::Task,
+                text: String::new(),
+                tags,
+                line_index: None,
+                indent: 0,
+            };
+            assert_eq!(Value::Bool(true), expr.evaluate(&item));
         }
     }
 }
