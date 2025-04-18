@@ -65,6 +65,10 @@ impl TokenKind {
             TokenKind::Not | TokenKind::And | TokenKind::Or | TokenKind::True | TokenKind::False
         )
     }
+
+    pub fn is_paren(&self) -> bool {
+        matches!(*self, TokenKind::LeftParen | TokenKind::RightParen)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -84,7 +88,7 @@ impl Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
     Tag(String),
     Grouping(Box<Expr>),
@@ -195,6 +199,20 @@ impl Value {
     }
 }
 
+/// Creates a binary expression from a predicate token type and two expressions
+fn expr_from_predicate(pred: TokenKind, left: Box<Expr>, right: Box<Expr>) -> Box<Expr> {
+    match pred {
+        TokenKind::BangEqual => Box::new(Expr::NotEqual(left, right)),
+        TokenKind::Equal | TokenKind::EqualEqual => Box::new(Expr::Equal(left, right)),
+        TokenKind::Greater => Box::new(Expr::Greater(left, right)),
+        TokenKind::GreaterEqual => Box::new(Expr::GreaterEqual(left, right)),
+        TokenKind::Less => Box::new(Expr::Less(left, right)),
+        TokenKind::LessEqual => Box::new(Expr::LessEqual(left, right)),
+        TokenKind::Contains => Box::new(Expr::Contains(left, right)),
+        c => unreachable!("{:?}", c),
+    }
+}
+
 impl Expr {
     pub fn parse(text: &str) -> Result<Expr> {
         let tokens = lex(text)?;
@@ -250,7 +268,9 @@ impl Expr {
                 Value::Undefined | Value::Bool(_) => Value::Bool(false),
                 Value::String(left) => match r.evaluate(item) {
                     Value::Undefined | Value::Bool(_) => Value::Bool(false),
-                    Value::String(right) => Value::Bool(left.to_lowercase().contains(&right.to_lowercase())),
+                    Value::String(right) => {
+                        Value::Bool(left.to_lowercase().contains(&right.to_lowercase()))
+                    }
                 },
             },
             // Logical
@@ -311,16 +331,7 @@ impl Parser {
             // to pass ownership in advance() and previous()
             let prev = self.previous().kind.clone();
             let right = self.unary()?;
-            expr = match prev {
-                TokenKind::BangEqual => Box::new(Expr::NotEqual(expr, right)),
-                TokenKind::Equal | TokenKind::EqualEqual => Box::new(Expr::Equal(expr, right)),
-                TokenKind::Greater => Box::new(Expr::Greater(expr, right)),
-                TokenKind::GreaterEqual => Box::new(Expr::GreaterEqual(expr, right)),
-                TokenKind::Less => Box::new(Expr::Less(expr, right)),
-                TokenKind::LessEqual => Box::new(Expr::LessEqual(expr, right)),
-                TokenKind::Contains => Box::new(Expr::Contains(expr, right)),
-                c => unreachable!("{:?}", c),
-            }
+            expr = expr_from_predicate(prev, expr, right)
         }
         Ok(expr)
     }
@@ -380,7 +391,7 @@ impl Parser {
         let expr = Box::new(Expr::Tag(tag));
 
         // If we are at the end, this is just a tag. It could also be something like '@foo and @bar'
-        if self.is_at_end() || self.peek().kind.is_keyword() {
+        if self.is_at_end() || self.peek().kind.is_keyword() || self.peek().kind.is_paren() {
             return Ok(expr);
         }
 
@@ -393,18 +404,7 @@ impl Parser {
         };
 
         let right = self.value()?;
-
-        // NOCOM(#hrapp): THis code is duplicated
-        match pred {
-            TokenKind::BangEqual => Ok(Box::new(Expr::NotEqual(expr, right))),
-            TokenKind::Equal | TokenKind::EqualEqual => Ok(Box::new(Expr::Equal(expr, right))),
-            TokenKind::Greater => Ok(Box::new(Expr::Greater(expr, right))),
-            TokenKind::GreaterEqual => Ok(Box::new(Expr::GreaterEqual(expr, right))),
-            TokenKind::Less => Ok(Box::new(Expr::Less(expr, right))),
-            TokenKind::LessEqual => Ok(Box::new(Expr::LessEqual(expr, right))),
-            TokenKind::Contains => Ok(Box::new(Expr::Contains(expr, right))),
-            c => unreachable!("{:?}", c),
-        }
+        Ok(expr_from_predicate(pred, expr, right))
     }
 
     /// Parse a single value (string or tag) for use as the right-hand side of a clause.
@@ -631,7 +631,11 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                         _ => &[TokenKind::String(string)],
                     }
                 };
-                tokens.extend(kinds.iter().map(|kind| Token::new(kind.clone(), offset, len)));
+                tokens.extend(
+                    kinds
+                        .iter()
+                        .map(|kind| Token::new(kind.clone(), offset, len)),
+                );
             }
         }
     }
@@ -1004,6 +1008,12 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_in_parens() {
+        let expr = Expr::parse("(@foo) and (@type = \"task\" and not @done)");
+        assert!(expr.is_ok());
+    }
+
+    #[test]
     fn test_mixing_string_bool() {
         let item = Item {
             kind: ItemKind::Task,
@@ -1022,9 +1032,6 @@ mod tests {
         assert_eq!(Value::Bool(false), expr.evaluate(&item));
     }
 
-    // NOCOM(#hrapp): This is parsing incorrectly
-    // (@bastian) and (@type = "task" and not @done)
-    // NOCOM(#hrapp): Also add a test case for "Project contains foo"
     #[test]
     fn test_tag_insertion() {
         use crate::Tag;
@@ -1079,5 +1086,25 @@ mod tests {
             };
             assert_eq!(Value::Bool(true), expr.evaluate(&item));
         }
+    }
+
+    #[test]
+    fn test_equivalent_inbox_queries() {
+        let expr1 = Expr::parse("Inbox").unwrap();
+        let expr2 = Expr::parse("@text Inbox").unwrap();
+        let expr3 = Expr::parse("contains Inbox").unwrap();
+        let expr4 = Expr::parse("@text contains Inbox").unwrap();
+        assert_eq!(
+            expr1, expr2,
+            "'Inbox' and '@text Inbox' should parse to the same expression"
+        );
+        assert_eq!(
+            expr1, expr3,
+            "'Inbox' and 'contains Inbox' should parse to the same expression"
+        );
+        assert_eq!(
+            expr1, expr4,
+            "'Inbox' and '@text contains Inbox' should parse to the same expression"
+        );
     }
 }
