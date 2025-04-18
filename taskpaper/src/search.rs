@@ -1022,6 +1022,9 @@ mod tests {
         assert_eq!(Value::Bool(false), expr.evaluate(&item));
     }
 
+    // NOCOM(#hrapp): This is parsing incorrectly
+    // (@bastian) and (@type = "task" and not @done)
+    // NOCOM(#hrapp): Also add a test case for "Project contains foo"
     #[test]
     fn test_tag_insertion() {
         use crate::Tag;
