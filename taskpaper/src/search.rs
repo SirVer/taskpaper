@@ -17,6 +17,8 @@ use crate::{Error, Item, ItemKind, Result};
 enum TokenKind {
     /// A Tag, optionally with a value
     Tag(String),
+    /// Decimal integer literal, e.g. 42
+    Number(i64),
     LeftParen,
     RightParen,
 
@@ -102,6 +104,7 @@ pub enum Expr {
     Contains(Box<Expr>, Box<Expr>),
 
     String(String),
+    Number(i64),
 
     Not(Box<Expr>),
     And(Box<Expr>, Box<Expr>),
@@ -115,6 +118,7 @@ pub enum Value {
     Undefined, // Missing tag
     Bool(bool),
     String(String),
+    Number(i64),
 }
 
 impl Value {
@@ -122,6 +126,7 @@ impl Value {
         match self {
             Value::Undefined => Value::Bool(true),
             Value::String(_) => Value::Bool(false),
+            Value::Number(a) => Value::Bool(*a == 0),
             Value::Bool(a) => Value::Bool(!a),
         }
     }
@@ -131,6 +136,7 @@ impl Value {
             Value::Undefined => false,
             Value::Bool(b) => *b,
             Value::String(s) => !s.is_empty(),
+            Value::Number(n) => *n != 0,
         }
     }
 
@@ -160,41 +166,37 @@ impl Value {
 
     fn less(self, o: Value) -> Value {
         match (self, o) {
-            (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
-            (Value::Bool(_), Value::String(_)) => Value::Undefined,
-            (Value::String(_), Value::Bool(_)) => Value::Undefined,
             (Value::Bool(a), Value::Bool(b)) => Value::Bool(!a & b),
+            (Value::Number(a), Value::Number(b)) => Value::Bool(a < b),
             (Value::String(a), Value::String(b)) => Value::Bool(a < b),
+            _ => Value::Undefined,
         }
     }
 
     fn less_equal(self, o: Value) -> Value {
         match (self, o) {
-            (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
-            (Value::Bool(_), Value::String(_)) => Value::Undefined,
-            (Value::String(_), Value::Bool(_)) => Value::Undefined,
             (Value::Bool(a), Value::Bool(b)) => Value::Bool(a <= b),
+            (Value::Number(a), Value::Number(b)) => Value::Bool(a <= b),
             (Value::String(a), Value::String(b)) => Value::Bool(a <= b),
+            _ => Value::Undefined,
         }
     }
 
     fn greater(self, o: Value) -> Value {
         match (self, o) {
-            (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
-            (Value::Bool(_), Value::String(_)) => Value::Undefined,
-            (Value::String(_), Value::Bool(_)) => Value::Undefined,
             (Value::Bool(a), Value::Bool(b)) => Value::Bool(a & !b),
+            (Value::Number(a), Value::Number(b)) => Value::Bool(a > b),
             (Value::String(a), Value::String(b)) => Value::Bool(a > b),
+            _ => Value::Undefined,
         }
     }
 
     fn greater_equal(self, o: Value) -> Value {
         match (self, o) {
-            (_, Value::Undefined) | (Value::Undefined, _) => Value::Undefined,
-            (Value::Bool(_), Value::String(_)) => Value::Undefined,
-            (Value::String(_), Value::Bool(_)) => Value::Undefined,
             (Value::Bool(a), Value::Bool(b)) => Value::Bool(a >= b),
+            (Value::Number(a), Value::Number(b)) => Value::Bool(a >= b),
             (Value::String(a), Value::String(b)) => Value::Bool(a >= b),
+            _ => Value::Undefined,
         }
     }
 }
@@ -241,7 +243,13 @@ impl Expr {
             // Tag: check in item.tags
             Expr::Tag(name) => match item.tags.get(name) {
                 Some(tag) => match tag.value {
-                    Some(value) => Value::String(value),
+                    Some(value) => {
+                        if let Ok(n) = value.parse::<i64>() {
+                            Value::Number(n)
+                        } else {
+                            Value::String(value)
+                        }
+                    }
                     None => Value::Bool(true),
                 },
                 None if name == "text" => Value::String(item.text.clone()),
@@ -252,7 +260,8 @@ impl Expr {
                 }),
                 None => Value::Undefined,
             },
-            // String literal
+            // Literals
+            Expr::Number(n) => Value::Number(*n),
             Expr::String(name) => Value::String(name.to_string()),
             // Grouping
             Expr::Grouping(inner) => inner.evaluate(item),
@@ -265,9 +274,9 @@ impl Expr {
             Expr::LessEqual(l, r) => l.evaluate(item).less_equal(r.evaluate(item)),
             // Contains: for text search, check item.text
             Expr::Contains(l, r) => match l.evaluate(item) {
-                Value::Undefined | Value::Bool(_) => Value::Bool(false),
+                Value::Undefined | Value::Bool(_) | Value::Number(_) => Value::Bool(false),
                 Value::String(left) => match r.evaluate(item) {
-                    Value::Undefined | Value::Bool(_) => Value::Bool(false),
+                    Value::Undefined | Value::Bool(_) | Value::Number(_) => Value::Bool(false),
                     Value::String(right) => {
                         Value::Bool(left.to_lowercase().contains(&right.to_lowercase()))
                     }
@@ -411,6 +420,7 @@ impl Parser {
     fn value(&mut self) -> Result<Box<Expr>> {
         let token = self.advance();
         match &token.kind {
+            TokenKind::Number(v) => Ok(Box::new(Expr::Number(*v))),
             TokenKind::String(v) => Ok(Box::new(Expr::String(v.to_string()))),
             TokenKind::Tag(v) => Ok(Box::new(Expr::Tag(v.to_string()))),
             _ => Err(Error::QuerySyntaxError(format!(
@@ -565,6 +575,17 @@ fn lex_tag(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
     Ok(Token::new(TokenKind::Tag(identifier), start, len))
 }
 
+fn lex_number(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
+    while matches!(stream.peek(), Some(c) if c.is_ascii_digit()) {
+        stream.advance();
+    }
+    let len = stream.position() - start;
+    let n: i64 = text[start..start + len]
+        .parse()
+        .map_err(|e| Error::QuerySyntaxError(format!("Bad number: {e}")))?;
+    Ok(Token::new(TokenKind::Number(n), start, len))
+}
+
 fn lex(input: &str) -> Result<Vec<Token>> {
     use self::TokenKind::*;
 
@@ -577,6 +598,7 @@ fn lex(input: &str) -> Result<Vec<Token>> {
             '(' => tokens.push(Token::new(LeftParen, position, 1)),
             ')' => tokens.push(Token::new(RightParen, position, 1)),
             ' ' | '\t' => (),
+            '0'..='9' => tokens.push(lex_number(input, position, &mut stream)?),
             '!' => {
                 if stream.is_next('=') {
                     tokens.push(Token::new(BangEqual, position, 2));
@@ -1106,5 +1128,47 @@ mod tests {
             expr1, expr4,
             "'Inbox' and '@text contains Inbox' should parse to the same expression"
         );
+    }
+
+    #[test]
+    fn test_int_comparison() {
+        let expr = Expr::parse("@mins > 5").unwrap();
+        let i = item_with_tags(&[("mins", Some("7"))]);
+        assert_eq!(Value::Bool(true), expr.evaluate(&i));
+
+        let i = item_with_tags(&[("mins", Some("3"))]);
+        assert_eq!(Value::Bool(false), expr.evaluate(&i));
+    }
+
+    #[test]
+    fn test_numeric_gt_left_longer() {
+        // 12 > 5 should be **true** numerically, but "12" < "5" lexicographically.
+        let expr = Expr::parse("@mins > 5").unwrap();
+        let i = item_with_tags(&[("mins", Some("12"))]);
+        assert_eq!(Value::Bool(true), expr.evaluate(&i));
+    }
+
+    #[test]
+    fn test_numeric_gt_left_shorter() {
+        // 2 > 10 should be **false** numerically, but "2" > "10" lexicographically.
+        let expr = Expr::parse("@mins > 10").unwrap();
+        let i = item_with_tags(&[("mins", Some("2"))]);
+        assert_eq!(Value::Bool(false), expr.evaluate(&i));
+    }
+
+    #[test]
+    fn test_numeric_le_mixed() {
+        // 100 <= 20 is **false** numerically, but "100" < "20" lexicographically.
+        let expr = Expr::parse("@size <= 20").unwrap();
+        let i = item_with_tags(&[("size", Some("100"))]);
+        assert_eq!(Value::Bool(false), expr.evaluate(&i));
+    }
+
+    #[test]
+    fn test_numeric_equality() {
+        // Equality on numbers should still work.
+        let expr = Expr::parse("@count == 42").unwrap();
+        let i = item_with_tags(&[("count", Some("42"))]);
+        assert_eq!(Value::Bool(true), expr.evaluate(&i));
     }
 }
