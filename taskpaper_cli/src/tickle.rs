@@ -32,7 +32,14 @@ pub fn tickle(
         tags.insert(tag);
         tickle.insert_node(node_id, Position::AsLast);
     }
-    tickle.sort_nodes_by_key(|node| node.item().tags().get("to_inbox").unwrap().value.unwrap());
+    tickle.sort_nodes_by_key(|node| {
+        node.item()
+            .tags()
+            .get("to_inbox")
+            .expect("item should have to_inbox.")
+            .value
+            .expect("to_inbox should have a value")
+    });
 
     // Remove tickle items from tickle file and add to inbox.
     let today = chrono::Local::now().date();
