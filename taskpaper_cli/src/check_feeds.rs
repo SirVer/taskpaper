@@ -1,6 +1,8 @@
 use crate::CliConfig;
 use anyhow::{anyhow, Context, Result};
 use chrono::prelude::*;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::BTreeSet;
@@ -44,7 +46,7 @@ pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) 
 
     let seen_ids_ref = &seen_ids.seen_ids;
     let result: Result<Vec<TaskItem>> = rt.block_on(async {
-        let client = reqwest::Client::builder().build()?;
+        let client = build_client()?;
 
         let feeds = read_feeds(&client, &cli_config.feeds, seen_ids_ref).await?;
         let mut rv = Vec::new();
@@ -127,21 +129,29 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
     Some(result)
 }
 
+fn build_client() -> Result<ClientWithMiddleware> {
+    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+    let client = ClientBuilder::new(reqwest::Client::builder().build()?)
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
+    Ok(client)
+}
+
 pub fn get_summary_blocking(url: &str) -> Result<Option<TaskItem>> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let client = reqwest::Client::builder().build()?;
+        let client = build_client()?;
         Ok(get_summary(&client, url, None).await?)
     })
 }
 
-async fn get_page_body(client: &reqwest::Client, url: &str) -> Result<String> {
+async fn get_page_body(client: &reqwest_middleware::ClientWithMiddleware, url: &str) -> Result<String> {
     Ok(client.get(url).send().await?.text().await?)
 }
 
 /// Turns a url into a TaskItem, suitable for use in the inbox.
 async fn get_summary(
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
     url: &str,
     guid: Option<String>,
 ) -> Result<Option<TaskItem>> {
@@ -184,7 +194,7 @@ async fn get_summary(
 }
 
 async fn get_summary_or_current_information(
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
     feed_presentation: FeedPresentation,
     url: &str,
     title: String,
@@ -228,7 +238,7 @@ async fn get_summary_or_current_information(
 /// Returns a vector of same length then feeds, which contains either an Err if the feed could not
 /// be read or a list of items that we did not see before on any prior run.
 async fn read_feeds(
-    client: &reqwest::Client,
+    client: &ClientWithMiddleware,
     feeds: &[FeedConfiguration],
     seen_ids: &BTreeSet<String>,
 ) -> Result<Vec<Result<Vec<TaskItem>>>> {
