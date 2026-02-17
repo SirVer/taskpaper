@@ -2,7 +2,11 @@ use crate::CliConfig;
 use anyhow::{anyhow, Context, Result};
 use chrono::prelude::*;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_retry::policies::ExponentialBackoff;
+use reqwest_retry::{
+    default_on_request_failure, default_on_request_success, Retryable, RetryTransientMiddleware,
+    RetryableStrategy,
+};
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::BTreeSet;
@@ -129,10 +133,29 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
     Some(result)
 }
 
+/// Treats 404 as transient (retryable) since YouTube intermittently returns 404
+/// for valid RSS feeds. All other responses use the default retry classification.
+struct RetryOn404;
+
+impl RetryableStrategy for RetryOn404 {
+    fn handle(&self, res: &Result<reqwest::Response, reqwest_middleware::Error>) -> Option<Retryable> {
+        match res {
+            Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => {
+                Some(Retryable::Transient)
+            }
+            Ok(response) => default_on_request_success(response),
+            Err(error) => default_on_request_failure(error),
+        }
+    }
+}
+
 fn build_client() -> Result<ClientWithMiddleware> {
     let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
     let client = ClientBuilder::new(reqwest::Client::builder().build()?)
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .with(RetryTransientMiddleware::new_with_policy_and_strategy(
+            retry_policy,
+            RetryOn404,
+        ))
         .build();
     Ok(client)
 }
