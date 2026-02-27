@@ -2215,7 +2215,7 @@ dependencies = [
 
 [[package]]
 name = "taskpaper"
-version = "0.27.3"
+version = "0.27.4"
 dependencies = [
  "log",
  "path-absolutize",
@@ -2230,7 +2230,7 @@ dependencies = [
 
 [[package]]
 name = "taskpaper_cli"
-version = "0.27.3"
+version = "0.27.4"
 dependencies = [
  "anyhow",
  "base64",
