@@ -54,19 +54,35 @@ pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) 
 
         let feeds = read_feeds(&client, &cli_config.feeds, seen_ids_ref).await?;
         let mut rv = Vec::new();
+        let mut errors: Vec<String> = Vec::new();
         for (feed, feed_config) in feeds.into_iter().zip(&cli_config.feeds) {
             match feed {
                 Ok(feed_items) => rv.extend(feed_items.into_iter()),
-                Err(e) => rv.push(TaskItem {
-                    title: format!("Could not fetch RSS for '{}'.", feed_config.url),
-                    note_text: textwrap::wrap(&format!("{:?}", e), 80)
-                        .into_iter()
-                        .map(|l| l.to_string())
-                        .collect(),
-                    guid: None,
-                    tags: Vec::new(),
-                }),
+                Err(e) => {
+                    errors.push(format!("{}: {:?}", feed_config.url, e));
+                }
             }
+        }
+
+        if !errors.is_empty() {
+            let mut note_text = Vec::new();
+            for error in &errors {
+                note_text.extend(
+                    textwrap::wrap(error, 80)
+                        .into_iter()
+                        .map(|l| l.to_string()),
+                );
+            }
+            rv.push(TaskItem {
+                title: format!(
+                    "Could not fetch {} RSS feed{}.",
+                    errors.len(),
+                    if errors.len() == 1 { "" } else { "s" }
+                ),
+                note_text,
+                guid: None,
+                tags: Vec::new(),
+            });
         }
 
         Ok(rv)
