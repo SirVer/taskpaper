@@ -1,0 +1,29 @@
+Privat:
+	Misc:
+		- Foo the blubl @april @due(2021-05-26)
+			Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam
+			nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat,
+			sed diam voluptua. At vero eos et accusam et justo duo dolores et ea
+			rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem
+			ipsum dolor sit amet.
+		- Laberablrbern tblube @trnae
+			Lorem ipsum dolor sit amet
+		- Fooblu @blutrn @foo @trnarte
+
+	Another project:
+		- Look it up @frbltrn @ytrnraie
+Work:
+	Do something or another:
+		- Discuss Foobul with blabhl @trnae @done(2021-05-25)
+		- Discuss Foobul with blabl @trainetriane
+
+	Yet another awesome but difficult problem:
+		- task 1 @done(2021-05-25)
+		- task two nothing to do @await
+			2021-05-25: done something or onather
+		- ask coworker about this thingy @trnae
+			Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam
+			nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat,
+			sed diam voluptua. At vero eos et accusam et justo duo dolores et ea
+			rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem
+			ipsum dolor sit amet.

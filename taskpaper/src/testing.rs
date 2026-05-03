@@ -40,7 +40,7 @@ impl DatabaseTest {
 
     pub fn assert_eq_to_golden(&self, golden: impl AsRef<Path>, path: impl AsRef<Path>) {
         let golden_data = fs::read_to_string(golden.as_ref()).expect("Could not read golden.");
-        let out = fs::read_to_string(&self.dir.path().join(path.as_ref()))
+        let out = fs::read_to_string(self.dir.path().join(path.as_ref()))
             .expect("Could not read golden.");
         if golden_data == out {
             return;

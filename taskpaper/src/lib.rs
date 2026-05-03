@@ -110,7 +110,7 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 /// whitespace into space, remove trailing : and leading '- '.
 pub fn sanitize_item_text(text: &str) -> String {
     // Make sure the line does not contain a newline and does not end with ':'
-    text.replace(|c| c == '\t' || c == '\n' || c == '\r', " ")
+    text.replace(['\t', '\n', '\r'], " ")
         .trim()
         .trim_end_matches(':')
         .trim_start_matches("- ")
@@ -200,7 +200,7 @@ impl Item {
         Item {
             kind,
             text,
-            tags: Tags::new(),
+            tags: Tags::default(),
             line_index: None,
             indent: 0,
         }
@@ -320,6 +320,12 @@ fn print_nodes(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ChildrenStrategy {
+    Remove,
+    Retain,
+}
+
 // This is the same as ItemKind at the moment, but I believe dealing with empty lines is easier if
 // this is kept separate.
 #[derive(Debug, PartialEq)]
@@ -432,6 +438,52 @@ pub enum Position<'a> {
     AsFirstChildOf(&'a NodeId),
     AsLastChildOf(&'a NodeId),
     After(&'a NodeId),
+}
+
+pub trait FilterQuery {
+    fn into_searcher(self) -> Result<Box<dyn Searcher>>;
+}
+
+pub trait Searcher {
+    fn matches(&self, item: &Item) -> bool;
+}
+
+struct StrSearcher {
+    expr: search::Expr,
+}
+
+impl Searcher for StrSearcher {
+    fn matches(&self, item: &Item) -> bool {
+        self.expr.evaluate(item).is_truish()
+    }
+}
+
+impl<F: Fn(&Item) -> bool> Searcher for F {
+    fn matches(&self, item: &Item) -> bool {
+        self(item)
+    }
+}
+
+impl<F: 'static + Fn(&Item) -> bool> FilterQuery for F {
+    fn into_searcher(self) -> Result<Box<dyn Searcher>> {
+        Ok(Box::new(self) as Box<dyn Searcher>)
+    }
+}
+
+impl FilterQuery for &str {
+    fn into_searcher(self) -> Result<Box<dyn Searcher>> {
+        Ok(Box::new(StrSearcher {
+            expr: search::Expr::parse(self)?,
+        }) as Box<dyn Searcher>)
+    }
+}
+
+impl FilterQuery for &String {
+    fn into_searcher(self) -> Result<Box<dyn Searcher>> {
+        Ok(Box::new(StrSearcher {
+            expr: search::Expr::parse(self)?,
+        }) as Box<dyn Searcher>)
+    }
 }
 
 impl TaskpaperFile {
@@ -604,30 +656,30 @@ impl TaskpaperFile {
 
     /// Removes all items from 'self' that match 'query' and return them in the returned value.
     /// If a parent item matches, the children are not tested further.
-    pub fn filter(&mut self, query: &str) -> Result<Vec<NodeId>> {
+    pub fn filter(&mut self, query: impl FilterQuery) -> Result<Vec<NodeId>> {
         fn recurse(
             arena: &mut [Node],
             node_ids: Vec<NodeId>,
-            expr: &search::Expr,
+            searcher: &dyn Searcher,
             filtered: &mut Vec<NodeId>,
         ) -> Vec<NodeId> {
             let mut retained = Vec::new();
             for node_id in node_ids {
-                if expr.evaluate(&arena[node_id.0].item).is_truish() {
+                if searcher.matches(&arena[node_id.0].item) {
                     filtered.push(node_id);
                 } else {
                     retained.push(node_id.clone());
                     let children = mem::replace(&mut arena[node_id.0].children, Vec::new());
-                    arena[node_id.0].children = recurse(arena, children, expr, filtered);
+                    arena[node_id.0].children = recurse(arena, children, searcher, filtered);
                 }
             }
             retained
         }
 
-        let expr = search::Expr::parse(query)?;
+        let searcher: Box<dyn Searcher> = query.into_searcher()?;
         let mut filtered = Vec::new();
         let nodes = mem::replace(&mut self.nodes, Vec::new());
-        self.nodes = recurse(&mut self.arena, nodes, &expr, &mut filtered);
+        self.nodes = recurse(&mut self.arena, nodes, &*searcher, &mut filtered);
         Ok(filtered)
     }
 
@@ -677,23 +729,35 @@ impl TaskpaperFile {
     }
 
     /// Removes the node with the given 'node_id' from the File, i.e. unlinks it from its parent.
-    pub fn unlink_node(&mut self, node_id: NodeId) {
+    /// If 'children' is remove the children are deleted too, otherwise they are lifted into the
+    /// position of the parent node.
+    // TODO(sirver): The 'Retain' code path is not tested.
+    pub fn unlink_node(&mut self, node_id: NodeId, children: ChildrenStrategy) {
+        let children = match children {
+            ChildrenStrategy::Retain => ::std::mem::take(&mut self.arena[node_id.0].children),
+            ChildrenStrategy::Remove => Vec::new(),
+        };
+        let nodes;
+        let parent;
         if self.arena[node_id.0].parent().is_some() {
             let parent_id = self.arena[node_id.0].parent().unwrap().0;
-            let parent_node = &mut self.arena[parent_id];
-            let pos = parent_node
-                .children
-                .iter()
-                .position(|x| x.0 == node_id.0)
-                .expect("The parent of a node does not have this node as child.");
-            parent_node.children.remove(pos);
+            parent = Some(NodeId(parent_id));
+            nodes = &mut self.arena[parent_id].children;
         } else {
-            let pos = self
-                .nodes
-                .iter()
-                .position(|x| x.0 == node_id.0)
-                .expect("The parent of a node does not have this node as child.");
-            self.nodes.remove(pos);
+            parent = None;
+            nodes = &mut self.nodes;
+        }
+        let pos = nodes
+            .iter()
+            .position(|x| x.0 == node_id.0)
+            .expect("The parent of a node does not have this node as child.");
+        nodes.remove(pos);
+        // TODO(sirver): This is potentially very slow, since it needs to shift all items around.
+        for c in children.iter().rev() {
+            self.nodes.insert(pos, c.clone());
+        }
+        for c in children.iter() {
+            self.arena[c.0].parent = parent.clone();
         }
         self.arena[node_id.0].parent = None;
     }
@@ -881,7 +945,7 @@ pub fn mirror_changes(
             .cloned()
             .collect::<Vec<_>>();
         for child_id in children_to_nuke {
-            destination.unlink_node(child_id);
+            destination.unlink_node(child_id, ChildrenStrategy::Remove);
         }
 
         // Copy all notes from other over.
@@ -912,7 +976,7 @@ mod tests {
             line_index: Some(0),
             text: "A task".to_string(),
             tags: {
-                let mut tags = Tags::new();
+                let mut tags = Tags::default();
                 tags.insert(Tag {
                     name: "tag1".into(),
                     value: None,
@@ -938,7 +1002,7 @@ mod tests {
             text: "A task".to_string(),
             line_index: Some(0),
             tags: {
-                let mut tags = Tags::new();
+                let mut tags = Tags::default();
                 tags.insert(Tag {
                     name: "tag1".into(),
                     value: None,
@@ -976,6 +1040,25 @@ mod tests {
         let expected = include_str!("tests/simple_project_canonical_formatting.taskpaper");
         let tpf = TaskpaperFile::parse(&input).unwrap();
         assert_eq!(expected, tpf.to_string(FormatOptions::default()));
+    }
+
+    #[test]
+    fn test_reformatting_indent_bug() {
+        let tpf =
+            TaskpaperFile::parse_file("src/tests/test_reformatting_indent_bug/input.taskpaper")
+                .unwrap();
+        let expected = include_str!("tests/test_reformatting_indent_bug/excepted.taskpaper");
+        assert_eq!(
+            expected,
+            &tpf.to_string(FormatOptions {
+                sort: Sort::ProjectsFirst,
+                empty_line_after_project: EmptyLineAfterProject {
+                    top_level: 0,
+                    first_level: 1,
+                    others: 0,
+                },
+            })
+        );
     }
 
     #[test]

@@ -24,18 +24,12 @@ impl fmt::Display for Tag {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Tags {
     tags: BTreeMap<String, Option<String>>,
 }
 
 impl Tags {
-    pub fn new() -> Self {
-        Tags {
-            tags: BTreeMap::new(),
-        }
-    }
-
     pub fn remove(&mut self, name: &str) {
         self.tags.remove(name);
     }
@@ -89,7 +83,7 @@ impl<'a> Iterator for TagsIterator<'a> {
 // lookback, which seems feasible. The cut out of the tags could then already be done in a single
 // iteration.
 pub fn extract_tags(mut line: String) -> (String, Tags) {
-    let mut tags = Tags::new();
+    let mut tags = Tags::default();
     let mut found = find_tags(&line);
     found.reverse();
     for (tag, (start, end)) in found {

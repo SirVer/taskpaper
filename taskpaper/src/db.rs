@@ -109,7 +109,7 @@ pub fn search<'a>(
 
     let mut matches = Vec::new();
     for path in searches.keys() {
-        let (node_ids, tpf) = &searches[&path as &Path];
+        let (node_ids, tpf) = &searches[path as &Path];
         if node_ids.is_empty() {
             continue;
         }
@@ -127,8 +127,8 @@ pub fn search<'a>(
 
     if let Some(ref s) = sort_order {
         matches.sort_by(|a, b| {
-            let val_a = get_sort_values(a.tpf, &s, &a.node_id, a.path, a.line_no);
-            let val_b = get_sort_values(b.tpf, &s, &b.node_id, b.path, b.line_no);
+            let val_a = get_sort_values(a.tpf, s, &a.node_id, a.path, a.line_no);
+            let val_b = get_sort_values(b.tpf, s, &b.node_id, b.path, b.line_no);
             for (idx, s) in s.iter().enumerate() {
                 let res = match s.dir {
                     SortDir::Asc => val_a[idx].cmp(&val_b[idx]),
@@ -160,7 +160,7 @@ impl Database {
 
     pub fn config(&self) -> Result<Config> {
         let data = std::fs::read_to_string(self.root.join(".config.toml"))?;
-        Ok(toml::from_str(&data).map_err(|e| crate::Error::InvalidConfig(e.to_string()))?)
+        toml::from_str(&data).map_err(|e| crate::Error::InvalidConfig(e.to_string()))
     }
 
     pub fn parse_all_files(&self) -> Result<HashMap<PathBuf, TaskpaperFile>> {
@@ -215,14 +215,14 @@ impl Database {
         let config = self.config()?;
         for name in [stem.as_ref(), "default"] {
             if let Some(f) = config.formats.get(name) {
-                return Ok(f.clone());
+                return Ok(*f);
             }
         }
         Ok(FormatOptions::default())
     }
 
     pub fn overwrite_common_file(&self, tpf: &TaskpaperFile, kind: CommonFileKind) -> Result<()> {
-        let format = self.get_format_for_filename(&kind.to_path_buf())?;
+        let format = self.get_format_for_filename(kind.to_path_buf())?;
         tpf.write(
             kind.find(&self.root).expect("Common file not found!"),
             format,

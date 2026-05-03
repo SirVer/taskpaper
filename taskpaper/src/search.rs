@@ -679,13 +679,13 @@ mod tests {
         Item {
             kind: ItemKind::Task,
             text: text.to_string(),
-            tags: Tags::new(),
+            tags: Tags::default(),
             line_index: None,
             indent: 0,
         }
     }
     fn item_with_tags(tags: &[(&str, Option<&str>)]) -> Item {
-        let mut t = Tags::new();
+        let mut t = Tags::default();
         for (k, v) in tags {
             t.insert(Tag::new((*k).to_string(), v.map(|s| s.to_string())));
         }
@@ -698,7 +698,7 @@ mod tests {
         }
     }
     fn item_with_text_and_tags(text: &str, tags: &[(&str, Option<&str>)]) -> Item {
-        let mut t = Tags::new();
+        let mut t = Tags::default();
         for (k, v) in tags {
             t.insert(Tag::new((*k).to_string(), v.map(|s| s.to_string())));
         }
@@ -970,7 +970,7 @@ mod tests {
         let item = Item {
             kind: ItemKind::Task,
             text: String::new(),
-            tags: Tags::new(),
+            tags: Tags::default(),
             line_index: None,
             indent: 0,
         };
@@ -1010,7 +1010,7 @@ mod tests {
         let item = Item {
             kind: ItemKind::Task,
             text: String::new(),
-            tags: Tags::new(),
+            tags: Tags::default(),
             line_index: None,
             indent: 0,
         };
@@ -1040,7 +1040,7 @@ mod tests {
         let item = Item {
             kind: ItemKind::Task,
             text: String::new(),
-            tags: Tags::new(),
+            tags: Tags::default(),
             line_index: None,
             indent: 0,
         };
@@ -1063,7 +1063,7 @@ mod tests {
             let item = Item {
                 kind: ItemKind::Task,
                 text: String::new(),
-                tags: Tags::new(),
+                tags: Tags::default(),
                 line_index: None,
                 indent: 0,
             };
@@ -1071,7 +1071,7 @@ mod tests {
         }
 
         {
-            let mut tags = Tags::new();
+            let mut tags = Tags::default();
             tags.insert(Tag::new("foo".to_string(), None));
             let item = Item {
                 kind: ItemKind::Task,
@@ -1084,7 +1084,7 @@ mod tests {
         }
 
         {
-            let mut tags = Tags::new();
+            let mut tags = Tags::default();
             tags.insert(Tag::new("bar".to_string(), Some("something".to_string())));
             let item = Item {
                 kind: ItemKind::Task,
@@ -1097,7 +1097,7 @@ mod tests {
         }
 
         {
-            let mut tags = Tags::new();
+            let mut tags = Tags::default();
             tags.insert(Tag::new("bar".to_string(), Some("any".to_string())));
             let item = Item {
                 kind: ItemKind::Task,
