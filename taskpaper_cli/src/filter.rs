@@ -1,16 +1,16 @@
 use anyhow::{anyhow, Result};
+use clap::Args;
 use std::path::PathBuf;
-use structopt::StructOpt;
 use taskpaper::{Database, TaskpaperFile};
 
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {
     /// File to modify.
-    #[structopt(parse(from_os_str), long = "--input", short = "-i")]
+    #[arg(long = "input", short = 'i')]
     input: PathBuf,
 
     /// Style to format with. The default is 'default'.
-    #[structopt(short = "-s", long = "--style")]
+    #[arg(short = 's', long = "style")]
     style: String,
 
     /// Query of the items to delete.

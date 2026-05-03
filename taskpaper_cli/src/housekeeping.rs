@@ -1,15 +1,8 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use structopt::StructOpt;
+use clap::Args;
 use taskpaper::Database;
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Formats {
-    formats: HashMap<String, taskpaper::FormatOptions>,
-}
-
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {}
 
 pub fn run(db: &Database, _: &CommandLineArguments) -> Result<()> {

@@ -1,4 +1,5 @@
 [workspace]
+resolver = "3"
 members = [
    "taskpaper",
    "taskpaper_cli",

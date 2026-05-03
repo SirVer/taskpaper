@@ -704,25 +704,25 @@ impl TaskpaperFile {
         recurse(&mut self.arena, source, source_id)
     }
 
-    pub fn iter(&self) -> TaskpaperIter {
+    pub fn iter(&self) -> TaskpaperIter<'_> {
         TaskpaperIter {
             tpf: self,
             open: self.nodes.iter().cloned().collect(),
         }
     }
 
-    pub fn iter_mut(&mut self) -> TaskpaperIterMut {
+    pub fn iter_mut(&mut self) -> TaskpaperIterMut<'_> {
         let open = self.nodes.iter().cloned().collect();
         TaskpaperIterMut { tpf: self, open }
     }
 
-    pub fn iter_node(&self, node_id: &NodeId) -> TaskpaperIter {
+    pub fn iter_node(&self, node_id: &NodeId) -> TaskpaperIter<'_> {
         let mut open = VecDeque::new();
         open.push_back(node_id.clone());
         TaskpaperIter { tpf: self, open }
     }
 
-    pub fn iter_node_mut(&mut self, node_id: &NodeId) -> TaskpaperIterMut {
+    pub fn iter_node_mut(&mut self, node_id: &NodeId) -> TaskpaperIterMut<'_> {
         let mut open = VecDeque::new();
         open.push_back(node_id.clone());
         TaskpaperIterMut { tpf: self, open }

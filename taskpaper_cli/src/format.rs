@@ -1,23 +1,15 @@
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use clap::Args;
 use std::path::PathBuf;
-use structopt::StructOpt;
 use taskpaper::{Database, TaskpaperFile};
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Formats {
-    formats: HashMap<String, taskpaper::FormatOptions>,
-}
-
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {
     /// File to read.
-    #[structopt(parse(from_os_str))]
     input: PathBuf,
 
     /// Style to format with. The default is 'default'.
-    #[structopt(short = "-s", long = "--style")]
+    #[arg(short = 's', long = "style")]
     style: Option<String>,
 }
 

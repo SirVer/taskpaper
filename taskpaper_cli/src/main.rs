@@ -1,6 +1,5 @@
-use self_update::cargo_crate_version;
+use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
 
 mod check_feeds;
 mod extract_timeline;
@@ -19,80 +18,56 @@ pub struct CliConfig {
     feeds: Vec<check_feeds::FeedConfiguration>,
 }
 
-fn update() -> Result<(), Box<dyn ::std::error::Error>> {
-    let target = self_update::get_target();
-    self_update::backends::github::Update::configure()
-        .repo_owner("SirVer")
-        .repo_name("taskpaper")
-        .target(&target)
-        .bin_name("taskpaper")
-        .show_download_progress(true)
-        .show_output(false)
-        .no_confirm(true)
-        .current_version(cargo_crate_version!())
-        .build()?
-        .update()?;
-    Ok(())
-}
-
 /// Command-line client to interact with taskpaper files.
-#[derive(StructOpt, Debug)]
-#[structopt(name = "taskpaper")]
+#[derive(Parser, Debug)]
+#[command(name = "taskpaper")]
 struct CommandLineArguments {
-    /// Update binary in-place from latest release.
-    #[structopt(long = "--update")]
-    update: bool,
-
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     cmd: Option<Command>,
 }
 
-#[derive(StructOpt, Debug)]
-#[structopt(rename_all = "verbatim")]
+#[derive(Subcommand, Debug)]
+#[command(rename_all = "verbatim")]
 enum Command {
     /// Add items to the inbox.
     /// This is smart about ',' and '.' as first character to add a note with the contents of the
     /// clipboard to every task that is added. Under Linux ',' is primary, i.e. the last mouse
     /// selection, while '.' is the X11 clipboard (copy & pasted). There is no distinction under
     /// Mac OS since there is only one clipboard.
-    #[structopt(name = "2inbox")]
+    #[command(name = "2inbox")]
     ToInbox(to_inbox::CommandLineArguments),
 
     /// Format a taskpaper file, without introducing any other changes.
-    #[structopt(name = "format")]
+    #[command(name = "format")]
     Format(format::CommandLineArguments),
 
     /// Housekeeping after any file has changed. This includes extracting the timeline and the
     /// checkout, as well as formatting todo and inbox.
-    #[structopt(name = "housekeeping")]
+    #[command(name = "housekeeping")]
     Housekeeping(housekeeping::CommandLineArguments),
 
-    #[structopt(name = "search")]
+    #[command(name = "search")]
     Search(search::CommandLineArguments),
 
     /// Log everything marked as done into the logbook.
-    #[structopt(name = "log_done")]
+    #[command(name = "log_done")]
     LogDone(log_done::CommandLineArguments),
 
     /// Remove all of the given tags in the given file.
-    #[structopt(name = "purge_tags")]
+    #[command(name = "purge_tags")]
     PurgeTags(purge_tags::CommandLineArguments),
 
     /// Remove all items matching the query from the input
-    #[structopt(name = "filter_out")]
+    #[command(name = "filter_out")]
     Filter(filter::CommandLineArguments),
 
     /// Checks all configured RSS feeds and puts them into the Inbox.
-    #[structopt(name = "check_feeds")]
+    #[command(name = "check_feeds")]
     CheckFeeds(check_feeds::CommandLineArguments),
 }
 
 fn main() {
-    let args = CommandLineArguments::from_args();
-    if args.update {
-        update().unwrap();
-        return;
-    }
+    let args = CommandLineArguments::parse();
 
     let home = dirs::home_dir().expect("HOME not set.");
     let config: CliConfig = {

@@ -1,49 +1,49 @@
 use anyhow::{anyhow, Result};
+use clap::Args;
 #[cfg(target_os = "macos")]
 use copypasta::{ClipboardContext, ClipboardProvider};
 #[cfg(target_os = "macos")]
 use osascript::JavaScript;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use structopt::StructOpt;
 use taskpaper::{sanitize_item_text, tag, Database, NodeId, TaskpaperFile};
 
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {
     /// Verbatim - ignore '.' and ',' for clipboard and do not expand urls.
-    #[structopt(long = "--verbatim")]
+    #[arg(long = "verbatim")]
     verbatim: bool,
 
     /// Add a link to the currently selected mail message to the item.
-    #[structopt(short = "-m", long = "--mail")]
+    #[arg(short = 'm', long = "mail")]
     mail: bool,
 
     /// Prompt for input instead of reading stdout directly.
-    #[structopt(short = "-p", long = "--prompt")]
+    #[arg(short = 'p', long = "prompt")]
     prompt: bool,
 
     /// Assume the input text is base64 encoded and decode it first.
-    #[structopt(long = "--base64")]
+    #[arg(long = "base64")]
     base64: bool,
 
     /// Style to format with. The default is 'inbox'.
-    #[structopt(short = "-s", long = "--style", default_value = "01_inbox")]
+    #[arg(short = 's', long = "style", default_value = "01_inbox")]
     style: String,
 
     /// The file to add this to. If not specified this is by default the inbox file.
-    #[structopt(parse(from_os_str), short = "-f")]
+    #[arg(short = 'f')]
     file: Option<PathBuf>,
 
     /// The project to add this item to. If empty, it will be added to the items of the file.
-    #[structopt(long = "--project")]
+    #[arg(long = "project")]
     project: Option<String>,
 
     /// Prepend the new item (instead of appending it)
-    #[structopt(long = "--prepend")]
+    #[arg(long = "prepend")]
     prepend: bool,
 
     /// Tags to add to this item (including @).
-    #[structopt(long = "--tag")]
+    #[arg(long = "tag")]
     tags: Vec<String>,
 }
 

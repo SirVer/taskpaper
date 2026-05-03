@@ -20,7 +20,9 @@ pub fn extract_timeline(db: &Database, todo: &mut TaskpaperFile) -> Result<()> {
         let mut due = chrono::NaiveDate::parse_from_str(&due, "%Y-%m-%d")
             .with_context(|| format!("Invalid date: {}", due))?;
         if due < today {
-            due = today.pred();
+            due = today
+                .pred_opt()
+                .expect("today minus one day is always representable");
         }
         sorted.entry(due).or_insert_with(Vec::new).push(item);
     }

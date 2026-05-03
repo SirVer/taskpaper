@@ -1,25 +1,25 @@
 use anyhow::Result;
+use clap::Args;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use structopt::StructOpt;
 use taskpaper::{db::Database, TaskpaperFile};
 
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {
     /// File to read. Otherwise every file in the database is considered.
-    #[structopt(parse(from_os_str), long = "--input", short = "-i")]
+    #[arg(long = "input", short = 'i')]
     input: Option<PathBuf>,
 
     /// Search query to run against the file.
     query: String,
 
     /// Print descendants (notes & children) for results.
-    #[structopt(short = "-d")]
+    #[arg(short = 'd')]
     descendants: bool,
 
     /// Sort order. This can be a comma separated list of tag names, optionally prepended by a - to
     /// inverse the ordering. They will be used as keys in order of appearance.
-    #[structopt(short = "-s")]
+    #[arg(short = 's')]
     sort_by: Option<String>,
 }
 

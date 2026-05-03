@@ -9,6 +9,7 @@ return {
    {
       should_run = is_rust,
       redirect_stderr = "/tmp/cargo.err",
+      delay = 200,
       commands = {
          -- Clippy does not report anything after cargo check
          {
@@ -25,12 +26,13 @@ return {
          },
          -- {
             -- name = "Running cargo clippy: ",
-            -- command = "cargo clippy " .. PACKAGE .. " --color=always", 
+            -- command = "cargo clippy " .. PACKAGE .. " --color=always",
          -- },
       }
    },
    {
       should_run = is_rust,
+      delay = 500,
       redirect_stderr = "/dev/null",
       redirect_stdout = "/dev/null",
       commands = {

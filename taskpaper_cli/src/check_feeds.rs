@@ -10,9 +10,9 @@ use reqwest_retry::{
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::BTreeSet;
+use clap::Args;
 use std::fs;
 use std::io;
-use structopt::StructOpt;
 use syndication::Feed;
 use taskpaper::{sanitize_item_text, Database, Position};
 
@@ -34,7 +34,7 @@ pub struct FeedConfiguration {
     tags: Option<Vec<String>>,
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {}
 
 pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) -> Result<()> {
@@ -144,7 +144,7 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
             let local = offset.from_local_datetime(&naive_date).single().unwrap();
             local.into()
         }
-        None => DateTime::from_utc(naive_date, Utc),
+        None => DateTime::from_naive_utc_and_offset(naive_date, Utc),
     };
     Some(result)
 }

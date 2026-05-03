@@ -42,7 +42,7 @@ pub fn tickle(
     });
 
     // Remove tickle items from tickle file and add to inbox.
-    let today = chrono::Local::now().date();
+    let today = chrono::Local::now().date_naive();
     let to_inbox = tickle.filter(&format!(
         "@to_inbox <= \"{}\"",
         today.format("%Y-%m-%d").to_string()

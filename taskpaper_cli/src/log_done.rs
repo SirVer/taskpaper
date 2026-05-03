@@ -2,11 +2,11 @@ use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use lazy_static::lazy_static;
 use std::borrow::Cow;
+use clap::Args;
 use std::cmp;
-use structopt::StructOpt;
-use taskpaper::{Database, Item, NodeId, Position, Tag, TaskpaperFile};
+use taskpaper::{ChildrenStrategy, Database, Item, NodeId, Position, Tag, TaskpaperFile};
 
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {}
 
 fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
@@ -19,7 +19,7 @@ fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
 /// The items in 'done' are ordered, so that they can be processed in order and unlinked without
 /// damaging the structure of 'todo'.
 fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut TaskpaperFile) {
-    let today = chrono::Local::now().date().format("%Y-%m-%d").to_string();
+    let today = chrono::Local::now().date_naive().format("%Y-%m-%d").to_string();
 
     for source_node_id in done {
         let node_id = logbook.copy_node(todo, &source_node_id);
@@ -39,7 +39,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
         };
         item.text = new_text;
 
-        todo.unlink_node(source_node_id);
+        todo.unlink_node(source_node_id, ChildrenStrategy::Remove);
 
         // Find the name of the parent project in the logbook.
         let parent_project = {
@@ -70,7 +70,7 @@ fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut Tas
             match NaiveDate::parse_from_str(&node.item().text(), "%A, %d. %B %Y") {
                 Ok(v) => v,
                 Err(_) => panic!(
-                    "Encountered unexpected date formatting: {}",
+                    "Encountered unexpected date formatting: '{}'",
                     node.item().text()
                 ),
             },

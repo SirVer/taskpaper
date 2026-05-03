@@ -1,19 +1,19 @@
 use anyhow::{anyhow, Result};
+use clap::Args;
 use std::path::PathBuf;
-use structopt::StructOpt;
 use taskpaper::{Database, TaskpaperFile};
 
-#[derive(StructOpt, Debug)]
+#[derive(Args, Debug)]
 pub struct CommandLineArguments {
     /// File to modify.
-    #[structopt(parse(from_os_str), required = true)]
+    #[arg(required = true)]
     input: PathBuf,
 
     /// Tags to purge (including the @).
     tags: Vec<String>,
 
     /// Style to format with. The default is 'default'.
-    #[structopt(short = "-s", long = "--style", default_value = "default")]
+    #[arg(short = 's', long = "style", default_value = "default")]
     style: String,
 }
 
