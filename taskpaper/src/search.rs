@@ -8,7 +8,7 @@
 //! binary     => unary ( ("==" | "!=" | "<" | "<=" | ">" | ">=") unary )*
 //! unary      => "not" unary
 //!             | primary;
-//! primary    => STRING | "false" | "true" | "(" expression ")";
+//! primary    => STRING | NUMBER | "false" | "true" | "(" expression ")";
 
 use crate::{Error, Item, ItemKind, Result};
 
@@ -140,8 +140,46 @@ impl Value {
         }
     }
 
+    /// The numeric interpretation of this value, if it has one.
+    fn as_number(&self) -> Option<i64> {
+        match self {
+            Value::Number(n) => Some(*n),
+            Value::String(s) => s.parse().ok(),
+            _ => None,
+        }
+    }
+
+    /// The string interpretation of this value, if it has one.
+    fn as_string(&self) -> Option<String> {
+        match self {
+            Value::String(s) => Some(s.clone()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        }
+    }
+
+    /// Compares with coercion: tag values auto-promote to numbers when they
+    /// parse as i64 while query literals may stay strings (and vice versa),
+    /// so compare numerically whenever both sides have a numeric
+    /// interpretation and fall back to string comparison otherwise.
+    fn compare(&self, o: &Value) -> Option<std::cmp::Ordering> {
+        match (self, o) {
+            (Value::Bool(a), Value::Bool(b)) => Some(a.cmp(b)),
+            _ => match (self.as_number(), o.as_number()) {
+                (Some(a), Some(b)) => Some(a.cmp(&b)),
+                _ => match (self.as_string(), o.as_string()) {
+                    (Some(a), Some(b)) => Some(a.cmp(&b)),
+                    _ => None,
+                },
+            },
+        }
+    }
+
     fn equal(&self, o: &Value) -> Value {
-        Value::Bool(*self == *o)
+        match self.compare(o) {
+            Some(ord) => Value::Bool(ord == std::cmp::Ordering::Equal),
+            None => Value::Bool(*self == *o),
+        }
     }
 
     fn or(self, o: Value) -> Value {
@@ -165,38 +203,30 @@ impl Value {
     }
 
     fn less(self, o: Value) -> Value {
-        match (self, o) {
-            (Value::Bool(a), Value::Bool(b)) => Value::Bool(!a & b),
-            (Value::Number(a), Value::Number(b)) => Value::Bool(a < b),
-            (Value::String(a), Value::String(b)) => Value::Bool(a < b),
-            _ => Value::Undefined,
+        match self.compare(&o) {
+            Some(ord) => Value::Bool(ord == std::cmp::Ordering::Less),
+            None => Value::Undefined,
         }
     }
 
     fn less_equal(self, o: Value) -> Value {
-        match (self, o) {
-            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a <= b),
-            (Value::Number(a), Value::Number(b)) => Value::Bool(a <= b),
-            (Value::String(a), Value::String(b)) => Value::Bool(a <= b),
-            _ => Value::Undefined,
+        match self.compare(&o) {
+            Some(ord) => Value::Bool(ord != std::cmp::Ordering::Greater),
+            None => Value::Undefined,
         }
     }
 
     fn greater(self, o: Value) -> Value {
-        match (self, o) {
-            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a & !b),
-            (Value::Number(a), Value::Number(b)) => Value::Bool(a > b),
-            (Value::String(a), Value::String(b)) => Value::Bool(a > b),
-            _ => Value::Undefined,
+        match self.compare(&o) {
+            Some(ord) => Value::Bool(ord == std::cmp::Ordering::Greater),
+            None => Value::Undefined,
         }
     }
 
     fn greater_equal(self, o: Value) -> Value {
-        match (self, o) {
-            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a >= b),
-            (Value::Number(a), Value::Number(b)) => Value::Bool(a >= b),
-            (Value::String(a), Value::String(b)) => Value::Bool(a >= b),
-            _ => Value::Undefined,
+        match self.compare(&o) {
+            Some(ord) => Value::Bool(ord != std::cmp::Ordering::Less),
+            None => Value::Undefined,
         }
     }
 }
@@ -272,16 +302,19 @@ impl Expr {
             Expr::GreaterEqual(l, r) => l.evaluate(item).greater_equal(r.evaluate(item)),
             Expr::Less(l, r) => l.evaluate(item).less(r.evaluate(item)),
             Expr::LessEqual(l, r) => l.evaluate(item).less_equal(r.evaluate(item)),
-            // Contains: for text search, check item.text
-            Expr::Contains(l, r) => match l.evaluate(item) {
-                Value::Undefined | Value::Bool(_) | Value::Number(_) => Value::Bool(false),
-                Value::String(left) => match r.evaluate(item) {
-                    Value::Undefined | Value::Bool(_) | Value::Number(_) => Value::Bool(false),
-                    Value::String(right) => {
+            // Contains: for text search, check item.text. Numbers are
+            // stringified so 'contains 42' works.
+            Expr::Contains(l, r) => {
+                match (
+                    l.evaluate(item).as_string(),
+                    r.evaluate(item).as_string(),
+                ) {
+                    (Some(left), Some(right)) => {
                         Value::Bool(left.to_lowercase().contains(&right.to_lowercase()))
                     }
-                },
-            },
+                    _ => Value::Bool(false),
+                }
+            }
             // Logical
             Expr::Not(e) => e.evaluate(item).not(),
             Expr::And(l, r) => l.evaluate(item).and(r.evaluate(item)),
@@ -375,7 +408,9 @@ impl Parser {
                 self.advance();
                 Box::new(Expr::True)
             }
-            TokenKind::Tag(_) | TokenKind::String(_) => self.parse_clause()?,
+            TokenKind::Tag(_) | TokenKind::String(_) | TokenKind::Number(_) => {
+                self.parse_clause()?
+            }
             t if t.is_predicate() => self.parse_clause()?,
             _ => {
                 return Err(Error::QuerySyntaxError(format!(
@@ -389,15 +424,19 @@ impl Parser {
 
     /// Parse an atomic clause: [attribute] [relation] value, with defaults.
     fn parse_clause(&mut self) -> Result<Box<Expr>> {
-        let tag = if let TokenKind::Tag(t) = &self.peek().kind {
-            let v = t.to_string();
-            self.advance();
-            v
-        } else {
-            "text".to_string()
+        let expr = match &self.peek().kind {
+            TokenKind::Tag(t) => {
+                let v = t.to_string();
+                self.advance();
+                Box::new(Expr::Tag(v))
+            }
+            // A literal directly followed by a relation is the left-hand side
+            // of a comparison, e.g. '"2026-04-01" <= @done' or '5 < @mins'.
+            TokenKind::String(_) | TokenKind::Number(_) if self.peek_next_is_predicate() => {
+                self.value()?
+            }
+            _ => Box::new(Expr::Tag("text".to_string())),
         };
-
-        let expr = Box::new(Expr::Tag(tag));
 
         // If we are at the end, this is just a tag. It could also be something like '@foo and @bar'
         if self.is_at_end() || self.peek().kind.is_keyword() || self.peek().kind.is_paren() {
@@ -438,6 +477,12 @@ impl Parser {
             }
         }
         false
+    }
+
+    fn peek_next_is_predicate(&self) -> bool {
+        self.tokens
+            .get(self.current + 1)
+            .is_some_and(|t| t.kind.is_predicate())
     }
 
     fn check(&mut self, t: &TokenKind) -> bool {
@@ -575,17 +620,6 @@ fn lex_tag(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
     Ok(Token::new(TokenKind::Tag(identifier), start, len))
 }
 
-fn lex_number(text: &str, start: usize, stream: &mut CharStream) -> Result<Token> {
-    while matches!(stream.peek(), Some(c) if c.is_ascii_digit()) {
-        stream.advance();
-    }
-    let len = stream.position() - start;
-    let n: i64 = text[start..start + len]
-        .parse()
-        .map_err(|e| Error::QuerySyntaxError(format!("Bad number: {e}")))?;
-    Ok(Token::new(TokenKind::Number(n), start, len))
-}
-
 fn lex(input: &str) -> Result<Vec<Token>> {
     use self::TokenKind::*;
 
@@ -598,7 +632,6 @@ fn lex(input: &str) -> Result<Vec<Token>> {
             '(' => tokens.push(Token::new(LeftParen, position, 1)),
             ')' => tokens.push(Token::new(RightParen, position, 1)),
             ' ' | '\t' => (),
-            '0'..='9' => tokens.push(lex_number(input, position, &mut stream)?),
             '!' => {
                 if stream.is_next('=') {
                     tokens.push(Token::new(BangEqual, position, 2));
@@ -634,6 +667,11 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 let (string, offset, len) = lex_string(other, input, position, &mut stream)?;
                 let kinds: &[_] = if other == '"' {
                     &[TokenKind::String(string)]
+                } else if let Ok(n) = string.parse::<i64>() {
+                    // Only a whole word that parses as an integer is a number.
+                    // This keeps dates (2026-04-01) as strings and supports
+                    // negative numbers (-5).
+                    &[TokenKind::Number(n)]
                 } else {
                     match &string as &str {
                         // Shortcuts
@@ -1165,10 +1203,89 @@ mod tests {
     }
 
     #[test]
+    fn test_date_range_string_literal_lhs() {
+        // A string literal on the left-hand side of a comparison must be
+        // treated as a value, not as an implicit '@text contains' clause.
+        let expr = Expr::parse("(\"2026-04-01\" <= @done) and (@done < \"2026-07-01\")").unwrap();
+        println!("AST: {expr:#?}");
+
+        let i = item_with_tags(&[("done", Some("2026-05-15"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+
+        let i = item_with_tags(&[("done", Some("2026-03-31"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+
+        let i = item_with_tags(&[("done", Some("2026-07-01"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+
+        // Items without @done must not match.
+        let i = item_with_text("no done tag here");
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
+
+    #[test]
     fn test_numeric_equality() {
         // Equality on numbers should still work.
         let expr = Expr::parse("@count == 42").unwrap();
         let i = item_with_tags(&[("count", Some("42"))]);
         assert_eq!(Value::Bool(true), expr.evaluate(&i));
+    }
+
+    #[test]
+    fn test_numeric_string_coercion_in_comparisons() {
+        // A numeric tag value must compare against a quoted number literal:
+        // types are coerced at comparison time, not silently mismatched.
+        let i = item_with_tags(&[("priority", Some("2"))]);
+        let q = |s| Expr::parse(s).unwrap().evaluate(&i).is_truish();
+        assert_eq!(q("@priority = \"2\""), true);
+        assert_eq!(q("@priority > \"1\""), true);
+        // Numeric, not lexicographic: "2" > "10" as strings, but 2 < 10 as numbers.
+        assert_eq!(q("@priority > \"10\""), false);
+
+        let i = item_with_tags(&[("mins", Some("7"))]);
+        let expr = Expr::parse("\"5\" < @mins").unwrap();
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+    }
+
+    #[test]
+    fn test_contains_with_number_literal() {
+        let i = item_with_text("the answer is 42 somewhere");
+        let q = |s| Expr::parse(s).unwrap().evaluate(&i).is_truish();
+        assert_eq!(q("@text contains 42"), true);
+        // A bare number is a text search, like any other bare word.
+        assert_eq!(q("42"), true);
+        assert_eq!(q("43"), false);
+    }
+
+    #[test]
+    fn test_number_literal_lhs() {
+        let i = item_with_tags(&[("mins", Some("7"))]);
+        let q = |s| Expr::parse(s).unwrap().evaluate(&i).is_truish();
+        assert_eq!(q("5 < @mins"), true);
+        assert_eq!(q("10 < @mins"), false);
+    }
+
+    #[test]
+    fn test_unquoted_dates() {
+        // Unquoted dates must lex as one string token, not Number(2026)
+        // followed by a stray "-04-01".
+        let expr = Expr::parse("@done >= 2026-04-01 and @done < 2026-07-01").unwrap();
+
+        let i = item_with_tags(&[("done", Some("2026-04-02"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), true);
+        let i = item_with_tags(&[("done", Some("2026-03-15"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+        let i = item_with_tags(&[("done", Some("2026-07-01"))]);
+        assert_eq!(expr.evaluate(&i).is_truish(), false);
+    }
+
+    #[test]
+    fn test_negative_numbers() {
+        // Tag values that parse as i64 become numbers, so literals must too.
+        let i = item_with_tags(&[("temp", Some("-5"))]);
+        let q = |s| Expr::parse(s).unwrap().evaluate(&i).is_truish();
+        assert_eq!(q("@temp = -5"), true);
+        assert_eq!(q("@temp < 0"), true);
+        assert_eq!(q("@temp = -4"), false);
     }
 }

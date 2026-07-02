@@ -81,19 +81,23 @@ fn main() {
 
     let db = taskpaper::Database::from_dir(&config.database).expect("Could not open the database.");
 
-    match args.cmd {
-        Some(Command::Search(args)) => search::search(&db, &args).unwrap(),
-        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args).unwrap(),
-        Some(Command::Format(args)) => format::format(&db, &args).unwrap(),
-        Some(Command::Housekeeping(args)) => housekeeping::run(&db, &args).unwrap(),
-        Some(Command::LogDone(args)) => log_done::run(&db, &args).unwrap(),
-        Some(Command::PurgeTags(args)) => purge_tags::run(&db, &args).unwrap(),
-        Some(Command::Filter(args)) => filter::run(&db, &args).unwrap(),
-        Some(Command::CheckFeeds(args)) => check_feeds::run(&db, &args, &config).unwrap(),
+    let result = match args.cmd {
+        Some(Command::Search(args)) => search::search(&db, &args),
+        Some(Command::ToInbox(args)) => to_inbox::to_inbox(&db, &args),
+        Some(Command::Format(args)) => format::format(&db, &args),
+        Some(Command::Housekeeping(args)) => housekeeping::run(&db, &args),
+        Some(Command::LogDone(args)) => log_done::run(&db, &args),
+        Some(Command::PurgeTags(args)) => purge_tags::run(&db, &args),
+        Some(Command::Filter(args)) => filter::run(&db, &args),
+        Some(Command::CheckFeeds(args)) => check_feeds::run(&db, &args, &config),
         None => {
             // TODO(sirver): I found no easy way to make clap output the usage here.
             println!("Need a subcommand.");
             std::process::exit(1);
         }
+    };
+    if let Err(err) = result {
+        eprintln!("Error: {err:#}");
+        std::process::exit(1);
     }
 }
