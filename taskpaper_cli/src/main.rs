@@ -21,7 +21,7 @@ pub struct CliConfig {
 
 /// Command-line client to interact with taskpaper files.
 #[derive(Parser, Debug)]
-#[command(name = "taskpaper")]
+#[command(name = "taskpaper", version)]
 struct CommandLineArguments {
     #[command(subcommand)]
     cmd: Option<Command>,

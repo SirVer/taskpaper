@@ -31,7 +31,7 @@ soup = "0.5.1"
 syndication = "0.5.0"
 taskpaper = { path = "../taskpaper" }
 textwrap = "0.15.0"
-tokio = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
 toml = "0.5.5"
 
 [target."cfg(target_os = \"macos\")".dependencies]
