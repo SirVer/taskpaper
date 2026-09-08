@@ -246,11 +246,7 @@ pub enum CommonFileKind {
 impl CommonFileKind {
     fn find(&self, root: &Path) -> Option<PathBuf> {
         let path = root.join(self.to_path_buf());
-        if path.exists() {
-            Some(path)
-        } else {
-            None
-        }
+        if path.exists() { Some(path) } else { None }
     }
 
     fn to_path_buf(&self) -> PathBuf {
@@ -266,8 +262,8 @@ impl CommonFileKind {
 
 #[cfg(test)]
 mod tests {
-    use crate::testing::DatabaseTest;
     use crate::CommonFileKind;
+    use crate::testing::DatabaseTest;
 
     // TODO(sirver): Actually add a few tests for tickling, timeline and so on?
     #[test]

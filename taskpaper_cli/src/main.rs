@@ -7,6 +7,7 @@ mod filter;
 mod format;
 mod housekeeping;
 mod log_done;
+mod podcast_feed;
 mod purge_tags;
 mod search;
 mod tickle;

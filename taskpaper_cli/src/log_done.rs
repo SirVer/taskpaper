@@ -1,8 +1,8 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::NaiveDate;
+use clap::Args;
 use lazy_static::lazy_static;
 use std::borrow::Cow;
-use clap::Args;
 use std::cmp;
 use taskpaper::{ChildrenStrategy, Database, Item, NodeId, Position, Tag, TaskpaperFile};
 
@@ -19,7 +19,10 @@ fn find_project(tpf: &TaskpaperFile, text: &str) -> Option<NodeId> {
 /// The items in 'done' are ordered, so that they can be processed in order and unlinked without
 /// damaging the structure of 'todo'.
 fn log_to_logbook(done: Vec<NodeId>, todo: &mut TaskpaperFile, logbook: &mut TaskpaperFile) {
-    let today = chrono::Local::now().date_naive().format("%Y-%m-%d").to_string();
+    let today = chrono::Local::now()
+        .date_naive()
+        .format("%Y-%m-%d")
+        .to_string();
 
     for source_node_id in done {
         let node_id = logbook.copy_node(todo, &source_node_id);

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Args;
 #[cfg(target_os = "macos")]
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -6,7 +6,7 @@ use copypasta::{ClipboardContext, ClipboardProvider};
 use osascript::JavaScript;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use taskpaper::{sanitize_item_text, tag, Database, NodeId, TaskpaperFile};
+use taskpaper::{Database, NodeId, TaskpaperFile, sanitize_item_text, tag};
 
 #[derive(Args, Debug)]
 pub struct CommandLineArguments {

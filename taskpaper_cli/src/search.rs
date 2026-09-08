@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Args;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use taskpaper::{db::Database, TaskpaperFile};
+use taskpaper::{TaskpaperFile, db::Database};
 
 #[derive(Args, Debug)]
 pub struct CommandLineArguments {

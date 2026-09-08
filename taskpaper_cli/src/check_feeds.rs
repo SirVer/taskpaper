@@ -1,20 +1,22 @@
 use crate::CliConfig;
-use anyhow::{anyhow, Context, Result};
+use crate::podcast_feed;
+use anyhow::{Context, Result, anyhow};
 use chrono::prelude::*;
+use clap::Args;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::{
-    default_on_request_failure, default_on_request_success, Retryable, RetryTransientMiddleware,
-    RetryableStrategy,
+    RetryTransientMiddleware, Retryable, RetryableStrategy, default_on_request_failure,
+    default_on_request_success,
 };
 use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::collections::BTreeSet;
-use clap::Args;
 use std::fs;
 use std::io;
+use std::path::PathBuf;
 use syndication::Feed;
-use taskpaper::{sanitize_item_text, Database, Position};
+use taskpaper::{Database, Position, sanitize_item_text};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
 
@@ -29,15 +31,23 @@ enum FeedPresentation {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FeedConfiguration {
-    url: String,
+    pub url: String,
     presentation: Option<FeedPresentation>,
     tags: Option<Vec<String>>,
+    /// File name, relative to `--podcast-dir`, of a podcast RSS feed built from the AI narration
+    /// of this feed's posts. Only works for Substack publications, see `podcast_feed`.
+    pub podcast_file: Option<String>,
 }
 
 #[derive(Args, Debug)]
-pub struct CommandLineArguments {}
+pub struct CommandLineArguments {
+    /// Directory to write podcast feeds into, one per feed that has a `podcast_file` in the
+    /// config. Without this flag no podcast feeds are written.
+    #[arg(long)]
+    podcast_dir: Option<PathBuf>,
+}
 
-pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) -> Result<()> {
+pub fn run(db: &Database, args: &CommandLineArguments, cli_config: &CliConfig) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
 
     let archive = db.root.join(TASKPAPER_RSS_DONE_FILE);
@@ -52,9 +62,14 @@ pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) 
     let result: Result<Vec<TaskItem>> = rt.block_on(async {
         let client = build_client()?;
 
-        let feeds = read_feeds(&client, &cli_config.feeds, seen_ids_ref).await?;
+        let (feeds, podcast_errors) = futures::future::join(
+            read_feeds(&client, &cli_config.feeds, seen_ids_ref),
+            podcast_feed::write_all(&client, &cli_config.feeds, args.podcast_dir.as_deref()),
+        )
+        .await;
+        let feeds = feeds?;
         let mut rv = Vec::new();
-        let mut errors: Vec<String> = Vec::new();
+        let mut errors: Vec<String> = podcast_errors;
         for (feed, feed_config) in feeds.into_iter().zip(&cli_config.feeds) {
             match feed {
                 Ok(feed_items) => rv.extend(feed_items.into_iter()),
@@ -67,15 +82,11 @@ pub fn run(db: &Database, _args: &CommandLineArguments, cli_config: &CliConfig) 
         if !errors.is_empty() {
             let mut note_text = Vec::new();
             for error in &errors {
-                note_text.extend(
-                    textwrap::wrap(error, 80)
-                        .into_iter()
-                        .map(|l| l.to_string()),
-                );
+                note_text.extend(textwrap::wrap(error, 80).into_iter().map(|l| l.to_string()));
             }
             rv.push(TaskItem {
                 title: format!(
-                    "Could not fetch {} RSS feed{}.",
+                    "Could not fetch or write {} RSS feed{}.",
                     errors.len(),
                     if errors.len() == 1 { "" } else { "s" }
                 ),
@@ -154,7 +165,10 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
 struct RetryOn404;
 
 impl RetryableStrategy for RetryOn404 {
-    fn handle(&self, res: &Result<reqwest::Response, reqwest_middleware::Error>) -> Option<Retryable> {
+    fn handle(
+        &self,
+        res: &Result<reqwest::Response, reqwest_middleware::Error>,
+    ) -> Option<Retryable> {
         match res {
             Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => {
                 Some(Retryable::Transient)
@@ -165,7 +179,7 @@ impl RetryableStrategy for RetryOn404 {
     }
 }
 
-fn build_client() -> Result<ClientWithMiddleware> {
+pub fn build_client() -> Result<ClientWithMiddleware> {
     let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
     let client = ClientBuilder::new(reqwest::Client::builder().build()?)
         .with(RetryTransientMiddleware::new_with_policy_and_strategy(
@@ -184,7 +198,10 @@ pub fn get_summary_blocking(url: &str) -> Result<Option<TaskItem>> {
     })
 }
 
-async fn get_page_body(client: &reqwest_middleware::ClientWithMiddleware, url: &str) -> Result<String> {
+async fn get_page_body(
+    client: &reqwest_middleware::ClientWithMiddleware,
+    url: &str,
+) -> Result<String> {
     Ok(client.get(url).send().await?.text().await?)
 }
 

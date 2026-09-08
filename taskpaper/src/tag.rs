@@ -1,5 +1,5 @@
 use crate::search::CharStream;
-use std::collections::{btree_map::Iter as MapIter, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Iter as MapIter};
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -364,7 +364,10 @@ mod tests {
         }
         check("- foo blub @done", 1, "- foo blub");
         check("- foo @check blub @done @aaa", 3, "- foo blub");
-        check("- Verschiedenes • SirVer/giti: openssl@1.1 installation instructions for buildifier, clang-format and rustfmt @done(2018-01-15)", 1,
-"- Verschiedenes • SirVer/giti: openssl@1.1 installation instructions for buildifier, clang-format and rustfmt");
+        check(
+            "- Verschiedenes • SirVer/giti: openssl@1.1 installation instructions for buildifier, clang-format and rustfmt @done(2018-01-15)",
+            1,
+            "- Verschiedenes • SirVer/giti: openssl@1.1 installation instructions for buildifier, clang-format and rustfmt",
+        );
     }
 }

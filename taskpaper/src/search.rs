@@ -305,10 +305,7 @@ impl Expr {
             // Contains: for text search, check item.text. Numbers are
             // stringified so 'contains 42' works.
             Expr::Contains(l, r) => {
-                match (
-                    l.evaluate(item).as_string(),
-                    r.evaluate(item).as_string(),
-                ) {
+                match (l.evaluate(item).as_string(), r.evaluate(item).as_string()) {
                     (Some(left), Some(right)) => {
                         Value::Bool(left.to_lowercase().contains(&right.to_lowercase()))
                     }
@@ -416,7 +413,7 @@ impl Parser {
                 return Err(Error::QuerySyntaxError(format!(
                     "Invalid token: {:?}",
                     token.kind
-                )))
+                )));
             }
         };
         Ok(expr)
