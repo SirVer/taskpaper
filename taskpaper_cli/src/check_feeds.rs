@@ -3,7 +3,9 @@ use crate::podcast_feed;
 use anyhow::{Context, Result, anyhow};
 use chrono::prelude::*;
 use clap::Args;
+use futures::StreamExt;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::Jitter;
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::{
     RetryTransientMiddleware, Retryable, RetryableStrategy, default_on_request_failure,
@@ -15,10 +17,22 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::time::Duration;
 use syndication::Feed;
 use taskpaper::{Database, Position, sanitize_item_text};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
+
+/// How many feeds are fetched at the same time. Firing all ~100 feeds (most of them YouTube) at
+/// once is what makes YouTube start answering with errors.
+const MAX_CONCURRENT_FEEDS: usize = 8;
+
+/// Retries of a failed request. YouTube's errors often last for minutes, so the waits between
+/// attempts grow to `MAX_RETRY_INTERVAL`: 5s, 5-10s, 5-20s, 5-40s, 5-80s, 5-120s, roughly 2.5
+/// minutes on average before a feed is given up on.
+const MAX_RETRIES: u32 = 6;
+const MIN_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 enum FeedPresentation {
@@ -180,7 +194,19 @@ impl RetryableStrategy for RetryOn404 {
 }
 
 pub fn build_client() -> Result<ClientWithMiddleware> {
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+    build_client_with_retry_bounds(MIN_RETRY_INTERVAL, MAX_RETRY_INTERVAL)
+}
+
+fn build_client_with_retry_bounds(
+    min_interval: Duration,
+    max_interval: Duration,
+) -> Result<ClientWithMiddleware> {
+    // Bounded jitter never waits less than `min_interval`. The default (full) jitter can pick
+    // waits close to zero, so all retries could be over within a second or two.
+    let retry_policy = ExponentialBackoff::builder()
+        .retry_bounds(min_interval, max_interval)
+        .jitter(Jitter::Bounded)
+        .build_with_max_retries(MAX_RETRIES);
     let client = ClientBuilder::new(reqwest::Client::builder().build()?)
         .with(RetryTransientMiddleware::new_with_policy_and_strategy(
             retry_policy,
@@ -202,7 +228,15 @@ async fn get_page_body(
     client: &reqwest_middleware::ClientWithMiddleware,
     url: &str,
 ) -> Result<String> {
-    Ok(client.get(url).send().await?.text().await?)
+    // Without `error_for_status` the HTML of an error page would be returned as body and later
+    // be reported as unparsable feed, hiding the actual HTTP status.
+    Ok(client
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .text()
+        .await?)
 }
 
 /// Turns a url into a TaskItem, suitable for use in the inbox.
@@ -390,6 +424,134 @@ async fn read_feeds(
         })
     }
 
-    let rv = futures::future::join_all(futures).await;
+    let rv = futures::stream::iter(futures)
+        .buffered(MAX_CONCURRENT_FEEDS)
+        .collect()
+        .await;
     Ok(rv)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    const ATOM: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <id>yt:channel:test</id><title>Channel</title><updated>2026-09-01T00:00:00Z</updated>
+          <entry>
+            <id>yt:video:abc</id><title>Video</title><updated>2026-09-01T00:00:00Z</updated>
+            <published>2026-09-01T00:00:00+00:00</published>
+            <link rel="alternate" href="https://www.youtube.com/watch?v=abc"/>
+          </entry>
+        </feed>"#;
+
+    /// Retries without waiting, so the tests run fast.
+    fn fast_client() -> ClientWithMiddleware {
+        build_client_with_retry_bounds(Duration::from_millis(1), Duration::from_millis(5)).unwrap()
+    }
+
+    fn feed(url: String) -> FeedConfiguration {
+        FeedConfiguration {
+            url,
+            presentation: Some(FeedPresentation::FromFeed),
+            tags: Some(vec!["@youtube".into()]),
+            podcast_file: None,
+        }
+    }
+
+    fn read(feeds: &[FeedConfiguration]) -> Vec<Result<Vec<TaskItem>>> {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(read_feeds(&fast_client(), feeds, &BTreeSet::new()))
+            .unwrap()
+    }
+
+    #[test]
+    fn feed_is_read_after_transient_errors() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let server = rt.block_on(async {
+            let server = MockServer::start().await;
+            // Mocks are matched in mount order, the first one is used up after two requests.
+            Mock::given(method("GET"))
+                .and(path("/feed"))
+                .respond_with(ResponseTemplate::new(404).set_body_string("<html>404</html>"))
+                .up_to_n_times(2)
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/feed"))
+                .respond_with(ResponseTemplate::new(503))
+                .up_to_n_times(1)
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/feed"))
+                .respond_with(ResponseTemplate::new(200).set_body_string(ATOM))
+                .mount(&server)
+                .await;
+            server
+        });
+
+        let mut results = read(&[feed(format!("{}/feed", server.uri()))]);
+        let items = results.remove(0).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Video");
+        assert_eq!(items[0].guid.as_deref(), Some("yt:video:abc"));
+        assert_eq!(items[0].tags, vec!["@youtube".to_string()]);
+        let requests = rt.block_on(server.received_requests()).unwrap();
+        assert_eq!(requests.len(), 4);
+    }
+
+    #[test]
+    fn persistent_error_is_reported_with_status_after_all_retries() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let server = rt.block_on(async {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/feed"))
+                .respond_with(ResponseTemplate::new(404).set_body_string("<html>404</html>"))
+                .mount(&server)
+                .await;
+            server
+        });
+
+        let mut results = read(&[feed(format!("{}/feed", server.uri()))]);
+        let error = format!("{:#}", results.remove(0).unwrap_err());
+        assert!(error.contains("404 Not Found"), "{error}");
+        let requests = rt.block_on(server.received_requests()).unwrap();
+        assert_eq!(requests.len(), 1 + MAX_RETRIES as usize);
+    }
+
+    #[test]
+    fn results_keep_feed_order_with_limited_concurrency() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let server = rt.block_on(async {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/ok"))
+                .respond_with(ResponseTemplate::new(200).set_body_string(ATOM))
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/gone"))
+                .respond_with(ResponseTemplate::new(410))
+                .mount(&server)
+                .await;
+            server
+        });
+
+        // More feeds than MAX_CONCURRENT_FEEDS, every third one failing.
+        let feeds: Vec<_> = (0..3 * MAX_CONCURRENT_FEEDS)
+            .map(|i| {
+                let p = if i % 3 == 2 { "gone" } else { "ok" };
+                feed(format!("{}/{p}", server.uri()))
+            })
+            .collect();
+        let results = read(&feeds);
+        assert_eq!(results.len(), feeds.len());
+        for (i, result) in results.iter().enumerate() {
+            assert_eq!(result.is_err(), i % 3 == 2, "feed {i}");
+        }
+    }
 }

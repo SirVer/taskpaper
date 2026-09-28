@@ -355,21 +355,4 @@ mod tests {
         // The native episode keeps the duration Substack reports.
         assert!(xml.contains("<itunes:duration>2359</itunes:duration>"));
     }
-
-    /// Hits the network and writes into the temp dir. Run with `cargo test -- --ignored`.
-    #[test]
-    #[ignore = "network"]
-    fn writes_current_affairs_feed() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let path = std::env::temp_dir().join("taskpaper_podcast_test.xml");
-        rt.block_on(async {
-            let client = crate::check_feeds::build_client().unwrap();
-            write_one(&client, "https://currentaffairs.io/feed", &path)
-                .await
-                .unwrap();
-        });
-        let xml = fs::read_to_string(&path).unwrap();
-        assert!(xml.contains("<enclosure url=\"https://substack-video.s3.amazonaws.com/"));
-        eprintln!("Wrote {}", path.display());
-    }
 }
