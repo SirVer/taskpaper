@@ -583,4 +583,152 @@ mod tests {
         let mut results = read(&[feed(format!("{}/feed", server.uri()))]);
         assert_eq!(results.remove(0).unwrap().len(), 1);
     }
+
+    /// Serves `body` as the only feed and reads it, skipping the `seen` ids.
+    fn read_single(body: &str, seen: &[&str]) -> Result<Vec<TaskItem>> {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/feed"))
+                .respond_with(ResponseTemplate::new(200).set_body_string(body))
+                .mount(&server)
+                .await;
+            let seen = seen.iter().map(|s| s.to_string()).collect();
+            let feeds = [feed(format!("{}/feed", server.uri()))];
+            read_feeds(&fast_client(), &feeds, &seen)
+                .await
+                .unwrap()
+                .remove(0)
+        })
+    }
+
+    fn fields(items: &[TaskItem]) -> Vec<(&str, Vec<&str>, Option<&str>)> {
+        items
+            .iter()
+            .map(|i| {
+                let notes = i.note_text.iter().map(String::as_str).collect();
+                (i.title.as_str(), notes, i.guid.as_deref())
+            })
+            .collect()
+    }
+
+    /// The note shows the publication date in the local time zone.
+    fn published_line(rfc3339: &str) -> String {
+        let local = DateTime::parse_from_rfc3339(rfc3339)
+            .unwrap()
+            .with_timezone(&Local);
+        format!("Published: {}", local.format("%Y-%m-%d"))
+    }
+
+    #[test]
+    fn rss_items_become_tasks() {
+        let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+            <channel><title>Blog</title><link>https://blog.example</link><description>About</description>
+              <item>
+                <title>  Full post  </title><link>https://blog.example/full</link>
+                <guid>guid-full</guid><pubDate>Thu, 22 Oct 2026 23:30:00 +0200</pubDate>
+                <description>Short</description>
+                <content:encoded><![CDATA[<p>Long body</p>]]></content:encoded>
+              </item>
+              <item>
+                <title>Described</title><link>https://blog.example/described</link>
+                <description><![CDATA[<p>Only description</p>]]></description>
+              </item>
+              <item><link>https://blog.example/untitled</link></item>
+              <item><title>No link</title><guid>guid-nolink</guid></item>
+              <item><title>Seen</title><link>https://blog.example/seen</link><guid>guid-seen</guid></item>
+            </channel></rss>"#;
+
+        let items = read_single(body, &["guid-seen"]).unwrap();
+        let published = published_line("2026-10-22T23:30:00+02:00");
+        assert_eq!(
+            fields(&items),
+            vec![
+                (
+                    "Full post",
+                    vec!["https://blog.example/full", published.as_str(), "Long body"],
+                    Some("guid-full"),
+                ),
+                (
+                    "Described",
+                    vec!["https://blog.example/described", "Only description"],
+                    Some("https://blog.example/described"),
+                ),
+                (
+                    "No Title",
+                    vec!["https://blog.example/untitled"],
+                    Some("https://blog.example/untitled"),
+                ),
+            ]
+        );
+        assert!(items.iter().all(|i| i.tags == vec!["@youtube".to_string()]));
+    }
+
+    #[test]
+    fn atom_entries_become_tasks() {
+        let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <id>urn:feed</id><title>Atom</title><updated>2026-10-01T00:00:00Z</updated>
+              <entry>
+                <id>urn:content</id><title> Content entry </title>
+                <updated>2026-10-23T00:00:00Z</updated><published>2026-10-22T23:30:00+02:00</published>
+                <link href="https://atom.example/first"/>
+                <link rel="alternate" href="https://atom.example/second"/>
+                <summary>Summary text</summary>
+                <content type="html">&lt;p&gt;Content body&lt;/p&gt;</content>
+              </entry>
+              <entry>
+                <id>urn:summary</id><title>Summary entry</title><updated>2026-10-01T00:00:00Z</updated>
+                <link href="https://atom.example/summary"/><summary>Only summary</summary>
+              </entry>
+              <entry><id>urn:nolink</id><title>No link</title><updated>2026-10-01T00:00:00Z</updated></entry>
+              <entry>
+                <id>urn:seen</id><title>Seen</title><updated>2026-10-01T00:00:00Z</updated>
+                <link href="https://atom.example/seen"/>
+              </entry>
+            </feed>"#;
+
+        let items = read_single(body, &["urn:seen"]).unwrap();
+        let published = published_line("2026-10-22T23:30:00+02:00");
+        assert_eq!(
+            fields(&items),
+            vec![
+                (
+                    "Content entry",
+                    vec!["https://atom.example/first", published.as_str(), "Content body"],
+                    Some("urn:content"),
+                ),
+                (
+                    "Summary entry",
+                    vec!["https://atom.example/summary", "Only summary"],
+                    Some("urn:summary"),
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn atom_entry_with_unparsable_date_is_read_without_date() {
+        let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <id>urn:feed</id><title>Atom</title><updated>2026-10-01T00:00:00Z</updated>
+              <entry>
+                <id>urn:entry</id><title>Entry</title><updated>2026-10-01T00:00:00Z</updated>
+                <published>sometime last week</published><link href="https://atom.example/e"/>
+              </entry>
+            </feed>"#;
+
+        let items = read_single(body, &[]).unwrap();
+        assert_eq!(
+            fields(&items),
+            vec![("Entry", vec!["https://atom.example/e"], Some("urn:entry"))]
+        );
+    }
+
+    #[test]
+    fn body_that_is_neither_atom_nor_rss_is_an_error() {
+        assert!(read_single("<html><body>Not a feed</body></html>", &[]).is_err());
+    }
 }
