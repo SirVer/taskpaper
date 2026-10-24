@@ -207,7 +207,12 @@ fn build_client_with_retry_bounds(
         .retry_bounds(min_interval, max_interval)
         .jitter(Jitter::Bounded)
         .build_with_max_retries(MAX_RETRIES);
-    let client = ClientBuilder::new(reqwest::Client::builder().build()?)
+    // reqwest sends no User-Agent by default; some hosts (e.g. Cloudflare-fronted
+    // johndcook.com) answer such requests with 403 Forbidden.
+    let http_client = reqwest::Client::builder()
+        .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+        .build()?;
+    let client = ClientBuilder::new(http_client)
         .with(RetryTransientMiddleware::new_with_policy_and_strategy(
             retry_policy,
             RetryOn404,
@@ -434,7 +439,7 @@ async fn read_feeds(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{header_exists, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     const ATOM: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -553,5 +558,29 @@ mod tests {
         for (i, result) in results.iter().enumerate() {
             assert_eq!(result.is_err(), i % 3 == 2, "feed {i}");
         }
+    }
+
+    #[test]
+    fn requests_carry_a_user_agent() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let server = rt.block_on(async {
+            let server = MockServer::start().await;
+            // Like Cloudflare-fronted hosts: 403 for requests without a User-Agent.
+            Mock::given(method("GET"))
+                .and(path("/feed"))
+                .and(header_exists("user-agent"))
+                .respond_with(ResponseTemplate::new(200).set_body_string(ATOM))
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/feed"))
+                .respond_with(ResponseTemplate::new(403))
+                .mount(&server)
+                .await;
+            server
+        });
+
+        let mut results = read(&[feed(format!("{}/feed", server.uri()))]);
+        assert_eq!(results.remove(0).unwrap().len(), 1);
     }
 }
