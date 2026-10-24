@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
+atom_syndication = "0.12"
 base64 = "0.13.0"
 chrono = { version = "0.4.9", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
@@ -28,14 +29,13 @@ serde = { version = "1.0.102", features = [ "derive" ] }
 serde_json = "1"
 shellexpand = "2.1.0"
 soup = "0.5.1"
-syndication = "0.5.0"
 taskpaper = { path = "../taskpaper" }
 textwrap = "0.15.0"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 toml = "0.5.5"
 
 [target."cfg(target_os = \"macos\")".dependencies]
-copypasta = "0.8.1"
+copypasta = "0.10"
 osascript = "0.3.0"
 
 [dev-dependencies]

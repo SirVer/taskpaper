@@ -1,6 +1,6 @@
 use std::fs::{self};
 use std::path::{Path, PathBuf};
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 use crate::db::Database;
 
@@ -14,7 +14,7 @@ pub struct DatabaseTest {
 
 impl DatabaseTest {
     pub fn new() -> Self {
-        let dir = TempDir::new("taskpaper_db_test").expect("Could not create tempdir.");
+        let dir = TempDir::with_prefix("taskpaper_db_test").expect("Could not create tempdir.");
         DatabaseTest {
             dir,
             database: None,

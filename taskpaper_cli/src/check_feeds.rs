@@ -18,7 +18,6 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
-use syndication::Feed;
 use taskpaper::{Database, Position, sanitize_item_text};
 
 const TASKPAPER_RSS_DONE_FILE: &str = ".taskpaper_rss_done.toml";
@@ -172,6 +171,22 @@ fn parse_date(input_opt: Option<&str>) -> Option<DateTime<Utc>> {
         None => DateTime::from_naive_utc_and_offset(naive_date, Utc),
     };
     Some(result)
+}
+
+enum Feed {
+    Atom(atom_syndication::Feed),
+    Rss(rss::Channel),
+}
+
+fn parse_feed(body: &str) -> Result<Feed> {
+    let atom_err = match body.parse::<atom_syndication::Feed>() {
+        Ok(feed) => return Ok(Feed::Atom(feed)),
+        Err(e) => e,
+    };
+    match body.parse::<rss::Channel>() {
+        Ok(channel) => Ok(Feed::Rss(channel)),
+        Err(rss_err) => Err(anyhow!("Neither Atom ({atom_err}) nor RSS ({rss_err})")),
+    }
 }
 
 /// Treats 404 as transient (retryable) since YouTube intermittently returns 404
@@ -344,11 +359,8 @@ async fn read_feeds(
         futures.push(async move {
             let body = get_page_body(client, &feed.url).await?;
             let mut items = Vec::new();
-            match body
-                .parse::<Feed>()
-                .map_err(|e| anyhow!("Could not parse for {}: {}", feed.url, e))?
-            {
-                Feed::RSS(channel) => {
+            match parse_feed(&body).with_context(|| format!("Could not parse {}", feed.url))? {
+                Feed::Rss(channel) => {
                     for item in channel.items() {
                         let url = item.link();
                         if url.is_none() {
@@ -393,19 +405,17 @@ async fn read_feeds(
                         if urls.is_empty() {
                             continue;
                         }
-                        let content = {
-                            entry
-                                .content()
-                                .and_then(|v| v.value())
-                                .or_else(|| entry.summary())
-                                .unwrap_or("")
-                        };
+                        let content = entry
+                            .content()
+                            .and_then(|v| v.value())
+                            .or_else(|| entry.summary().map(|s| s.as_str()))
+                            .unwrap_or("");
                         let guid = entry.id().to_string();
                         if seen_ids.contains(&guid) {
                             continue;
                         }
 
-                        let published = parse_date(entry.published());
+                        let published = entry.published().map(|d| d.with_timezone(&Utc));
                         let title = entry.title().trim().to_string();
                         let mut task = get_summary_or_current_information(
                             client,
@@ -709,8 +719,11 @@ mod tests {
         );
     }
 
+    /// atom_syndication rejects the whole document on a date it cannot parse. Accepted when
+    /// replacing syndication, whose old atom parser kept dates as strings: the error is reported
+    /// for this feed only.
     #[test]
-    fn atom_entry_with_unparsable_date_is_read_without_date() {
+    fn atom_feed_with_unparsable_date_is_an_error() {
         let body = r#"<?xml version="1.0" encoding="UTF-8"?>
             <feed xmlns="http://www.w3.org/2005/Atom">
               <id>urn:feed</id><title>Atom</title><updated>2026-10-01T00:00:00Z</updated>
@@ -720,11 +733,7 @@ mod tests {
               </entry>
             </feed>"#;
 
-        let items = read_single(body, &[]).unwrap();
-        assert_eq!(
-            fields(&items),
-            vec![("Entry", vec!["https://atom.example/e"], Some("urn:entry"))]
-        );
+        assert!(read_single(body, &[]).is_err());
     }
 
     #[test]

@@ -14,7 +14,7 @@ log = "0.4.8"
 path-absolutize = "3.0.10"
 serde = { version = "1.0.102", features = [ "derive" ] }
 sha1_smol = { version = "1.0.0", features = ["std"] }
-tempdir = "0.3.7"
+tempfile = "3.10"
 thiserror = "1"
 toml = "0.5.5"
 walkdir = "2.2.5"
