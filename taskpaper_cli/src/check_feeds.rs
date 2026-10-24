@@ -740,4 +740,91 @@ mod tests {
     fn body_that_is_neither_atom_nor_rss_is_an_error() {
         assert!(read_single("<html><body>Not a feed</body></html>", &[]).is_err());
     }
+
+    /// Serves `head` inside an HTML page and summarizes that page. Returns the page url too.
+    fn summarize(head: &str) -> (String, TaskItem) {
+        let html = format!("<!DOCTYPE html><html><head>{head}</head><body><p>Body</p></body></html>");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/page"))
+                .respond_with(ResponseTemplate::new(200).set_body_string(html))
+                .mount(&server)
+                .await;
+            let url = format!("{}/page", server.uri());
+            let item = get_summary(&fast_client(), &url, Some("guid".into()))
+                .await
+                .unwrap()
+                .unwrap();
+            (url, item)
+        })
+    }
+
+    #[test]
+    fn summary_is_title_and_short_description() {
+        let (url, item) = summarize(
+            r#"<title>  Fish &amp; Chips
+               </title><meta name="description" content="Short description">"#,
+        );
+        assert_eq!(item.title, "Fish & Chips • Short description");
+        assert_eq!(item.note_text, vec![url]);
+        assert_eq!(item.guid.as_deref(), Some("guid"));
+        assert!(item.tags.is_empty());
+    }
+
+    #[test]
+    fn descriptions_longer_than_100_bytes_go_wrapped_into_the_note() {
+        // 50 'ä' are 100 bytes, 51 are 102: the limit counts bytes, not characters.
+        let fits = "ä".repeat(50);
+        let (url, item) =
+            summarize(&format!(r#"<title>T</title><meta name="description" content="{fits}">"#));
+        assert_eq!(item.title, format!("T • {fits}"));
+        assert_eq!(item.note_text, vec![url]);
+
+        let too_long = "ä".repeat(51);
+        let (url, item) = summarize(&format!(
+            r#"<title>T</title><meta name="description" content="{too_long}">"#
+        ));
+        assert_eq!(item.title, "T");
+        assert_eq!(item.note_text, vec![url, too_long]);
+
+        let words = "word ".repeat(30);
+        let (url, item) = summarize(&format!(
+            r#"<title>T</title><meta name="description" content="{}">"#,
+            words.trim_end()
+        ));
+        assert_eq!(item.title, "T");
+        assert_eq!(
+            item.note_text,
+            vec![
+                url,
+                "word ".repeat(16).trim_end().to_string(),
+                "word ".repeat(14).trim_end().to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn summary_falls_back_to_description_and_then_url() {
+        let (_, item) =
+            summarize(r#"<title>  </title><meta name="description" content="Only description">"#);
+        assert_eq!(item.title, "Only description");
+
+        let (url, item) = summarize(r#"<meta name="description" content="">"#);
+        assert_eq!(item.title, url);
+        assert_eq!(item.note_text, vec![url]);
+    }
+
+    #[test]
+    fn only_the_first_meta_named_exactly_description_counts() {
+        let (_, item) = summarize(
+            r#"<title>T</title>
+               <meta property="og:description" content="Open Graph">
+               <meta name="Description" content="Capitalized">
+               <meta name="description" content="First">
+               <meta name="description" content="Second">"#,
+        );
+        assert_eq!(item.title, "T • First");
+    }
 }

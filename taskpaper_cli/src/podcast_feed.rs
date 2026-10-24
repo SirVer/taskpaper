@@ -341,11 +341,30 @@ mod tests {
             .into_iter()
             .map(|e| e.into_item(10_250_640))
             .collect();
-        let xml = build_channel(&source, items).to_string();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("podcast.xml");
+        write_atomically(&path, &build_channel(&source, items)).unwrap();
+        let xml = fs::read_to_string(&path).unwrap();
+        assert!(!path.with_extension("tmp").exists());
 
         assert!(xml.contains(r#"xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd""#));
         assert!(xml.contains("<title>Pub</title>"));
+        assert!(xml.contains("<link>https://example.io</link>"));
+        assert!(xml.contains("<description>About</description>"));
+        assert!(xml.contains("<language>en</language>"));
+        assert!(xml.contains("<url>https://example.io/logo.png</url>"));
+        assert!(xml.contains("<itunes:summary>About</itunes:summary>"));
         assert!(xml.contains(r#"<itunes:image href="https://example.io/logo.png"/>"#));
+        assert!(xml.contains("<title>Narrated</title>"));
+        assert!(xml.contains("<link>https://example.io/p/narrated</link>"));
+        let written = Channel::read_from(xml.as_bytes()).unwrap();
+        let descriptions: Vec<_> = written
+            .items()
+            .iter()
+            .map(|i| i.description().map(str::trim))
+            .collect();
+        assert_eq!(descriptions, vec![Some("Desc"), Some("")]);
+        assert!(xml.contains("<pubDate>Wed, 29 Jul 2026 12:00:00 +0000</pubDate>"));
         assert!(xml.contains(
             r#"<enclosure url="https://s3.example/1.mp3" length="10250640" type="audio/mpeg"/>"#
         ));
@@ -353,6 +372,8 @@ mod tests {
         // 10250640 bytes at 48 kbps.
         assert!(xml.contains("<itunes:duration>1708</itunes:duration>"));
         // The native episode keeps the duration Substack reports.
+        assert!(xml.contains("<title>Native</title>"));
         assert!(xml.contains("<itunes:duration>2359</itunes:duration>"));
+        assert_eq!(xml.matches("<item>").count(), 2);
     }
 }

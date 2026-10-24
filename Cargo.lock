@@ -2619,6 +2619,7 @@ dependencies = [
  "shellexpand",
  "soup",
  "taskpaper",
+ "tempfile",
  "textwrap",
  "tokio",
  "toml",
