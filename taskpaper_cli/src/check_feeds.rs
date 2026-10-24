@@ -12,7 +12,7 @@ use reqwest_retry::{
     default_on_request_success,
 };
 use serde::{Deserialize, Serialize};
-use soup::{NodeExt, QueryBuilderExt, Soup};
+use scraper::{Html, Selector};
 use std::collections::BTreeSet;
 use std::fs;
 use std::io;
@@ -266,20 +266,21 @@ async fn get_summary(
     guid: Option<String>,
 ) -> Result<Option<TaskItem>> {
     let text = get_page_body(client, url).await?;
-    let soup = Soup::new(&text);
+    let document = Html::parse_document(&text);
 
     let mut title_text_lines = Vec::new();
     // Find and push the title.
-    if let Some(node) = soup.tag("title").find() {
-        let text = node.text().trim().to_string();
+    if let Some(node) = document.select(&Selector::parse("title").unwrap()).next() {
+        let text = node.text().collect::<String>().trim().to_string();
         if !text.is_empty() {
             title_text_lines.push(text);
         }
     };
     let mut extra_notes = Vec::new();
     // Find and push the description.
-    if let Some(node) = soup.tag("meta").attr("name", "description").find() {
-        if let Some(t) = node.attrs().get("content") {
+    let description = Selector::parse(r#"meta[name="description"]"#).unwrap();
+    if let Some(node) = document.select(&description).next() {
+        if let Some(t) = node.attr("content") {
             match t.len() {
                 0 => (),
                 1..=100 => title_text_lines.push(t.to_string()),

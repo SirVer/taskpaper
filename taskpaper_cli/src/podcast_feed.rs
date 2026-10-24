@@ -361,9 +361,9 @@ mod tests {
         let descriptions: Vec<_> = written
             .items()
             .iter()
-            .map(|i| i.description().map(str::trim))
+            .map(|i| i.description().unwrap_or_default().trim())
             .collect();
-        assert_eq!(descriptions, vec![Some("Desc"), Some("")]);
+        assert_eq!(descriptions, vec!["Desc", ""]);
         assert!(xml.contains("<pubDate>Wed, 29 Jul 2026 12:00:00 +0000</pubDate>"));
         assert!(xml.contains(
             r#"<enclosure url="https://s3.example/1.mp3" length="10250640" type="audio/mpeg"/>"#
