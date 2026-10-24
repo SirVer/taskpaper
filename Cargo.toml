@@ -4,3 +4,7 @@ members = [
    "taskpaper",
    "taskpaper_cli",
 ]
+
+# The single version for all crates in this workspace.
+[workspace.package]
+version = "0.29.0"

@@ -2,7 +2,7 @@
 authors = ["Holger Rapp <HolgerRapp@gmx.net>"]
 edition = "2024"
 name = "taskpaper_cli"
-version = "0.28.1"
+version.workspace = true
 
 [[bin]]
 name = "taskpaper"
